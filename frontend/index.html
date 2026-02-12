@@ -489,6 +489,39 @@
             <!-- Filled by JS based on Tab -->
         </div>
 
+        <!-- NEW: Sniper Manual (Practical Tips) -->
+        <div class="card" style="margin-bottom: 25px; border-left: 4px solid var(--success);">
+            <header style="margin-bottom: 12px;">
+                <h3 style="display: flex; align-items: center; gap: 8px; font-size: 1rem; color: var(--text-main);">
+                    <span>🎯</span> 狙擊手實戰觀察手冊 (Sniper Manual)
+                </h3>
+            </header>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px;">
+                <div style="background: rgba(255,255,255,0.03); padding: 12px; border-radius: 8px;">
+                    <div style="color: var(--success); font-weight: bold; margin-bottom: 6px; font-size: 0.9rem;">1. AI
+                        共識檢核 (Consensus)</div>
+                    <p style="font-size: 0.8rem; color: var(--text-muted); margin: 0;">
+                        當三個亞模型 (GB, RF, MLP) 分數**同時高於 60%** 時，代表訊號極度強烈。若 MLP 分數極低但其餘兩者極高，通常暗示模型對目前波動型態持保留態度。
+                    </p>
+                </div>
+                <div style="background: rgba(255,255,255,0.03); padding: 12px; border-radius: 8px;">
+                    <div style="color: var(--accent); font-weight: bold; margin-bottom: 6px; font-size: 0.9rem;">2. 技術面與
+                        AI 關聯性 (Correlation)</div>
+                    <p style="font-size: 0.8rem; color: var(--text-muted); margin: 0;">
+                        **AI 高分 + High Rise Score**：標標標準的強勢突破股。<br>
+                        **AI 高分 + Low Rise Score**：可能是潛在的底部反轉或 AI 偵測到技術面尚未反映的隱藏動能。
+                    </p>
+                </div>
+                <div style="background: rgba(255,255,255,0.03); padding: 12px; border-radius: 8px;">
+                    <div style="color: var(--error); font-weight: bold; margin-bottom: 6px; font-size: 0.9rem;">3.
+                        大盤系統風險 (System Risk)</div>
+                    <p style="font-size: 0.8rem; color: var(--text-muted); margin: 0;">
+                        模型專注於個股波動。若加權指數 (TAIEX) 處於空頭或異常波動期間，所有 AI 勝率應自動下修 10-20%，以防範大盤崩跌帶來的系統性風險。
+                    </p>
+                </div>
+            </div>
+        </div>
+
         <!-- MAIN TABLE -->
         <section class="card">
             <div id="table-container">
