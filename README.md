@@ -15,8 +15,8 @@
 * **後端 (Backend)**: FastAPI (Python)
 * **前端 (Frontend)**: 原生 JS, HTML5, CSS3 (現代化玻璃擬態 UI)
 * **資料庫 (Database)**: SQLite (本地持久化存儲)
-* **技術分析 (Analysis)**: Pandas, NumPy, 包含 KD, RSI, MACD, 布林通道, ATR 等指標
-* **人工智慧 (AI/ML)**: GradientBoostingClassifier (Scikit-Learn)
+* **技術分析 (Analysis)**: Pandas, NumPy, 包含 KD, RSI (Wilder's), MACD (Normalized), 布林通道, ATR 等指標
+* **人工智慧 (AI/ML)**: GradientBoostingClassifier (V2: 特徵標準化與不平衡處理)
 
 ## 🚀 快速上手 (Quick Start)
 

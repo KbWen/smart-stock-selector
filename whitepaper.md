@@ -14,7 +14,7 @@ Utilizes Moving Average ribbons (SMA20, SMA60). Full points are awarded when the
 
 ### B. Momentum (30%)
 
-* **RSI (14)**: Targets the "Sweet Spot" (55-75), avoiding overbought extremes.
+* **RSI (14)**: 採用標準的 **Wilder's Smoothing (EWMA)** 方法計算，捕捉更穩健的強弱訊號。
 * **KD (Stochastics)**: Identifies fresh "Golden Crosses" where K crosses above D below the 80 level.
 * **MACD**: Confirms directional strength via signal line divergence.
 
@@ -23,7 +23,7 @@ Utilizes Moving Average ribbons (SMA20, SMA60). Full points are awarded when the
 * **Bollinger Squeeze**: Detects periods of abnormally low volatility, often preceding explosive moves.
 * **Volume Breakout**: Filters for price moves supported by heavy institutional-grade volume (>1.5x MA20).
 
-## 2. The AI Sniper Model (Machine Learning)
+## 2. The AI Sniper Model (Machine Learning V2)
 
 Unlike "black box" models, our Sniper Model is trained with a specific exit strategy: **3:1 Risk/Reward**.
 
@@ -35,9 +35,11 @@ We label a "Win" ONLY if:
 2. Condition 1 is met **BEFORE** the price reaches a **-5%** stop loss.
 3. The outcome occurs within **20 trading days**.
 
-### Model Features
+### Advanced Feature Engineering (V2 Optimization)
 
-The GradientBoosting model ingests 16 technical features, including normalized **ATR (Average True Range)** to account for varied stock volatility.
+* **Feature Normalization**: MACD 與 MACD Hist 皆經過價格標準化 (`Indicator / Price`)，消除股價絕對值對模型權重的影響。
+* **Indicator Refinement**: 引入均線斜率 (`SMA Slope`) 與股價偏離度 (`Price Distance`)，捕捉趨勢的斜率與支撐強度。
+* **Class Weighting**: 針對獲利樣本稀缺 (15.58%) 的特性，在訓練過程中施加類別權重，強制模型提升對「潛在贏家」的辨識召回率 (Recall)。
 
 ## 3. Data Integrity & "No Look-ahead" Policy
 
