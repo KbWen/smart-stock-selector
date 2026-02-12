@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Stock Selector | AI Edition</title>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --accent: #38bdf8;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --ai-color: #a855f7;
+            --border: #334155;
+        }
+
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+
+        /* Header & Controls */
+        header {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--border);
+            gap: 15px;
+        }
+
+        h1 {
+            font-size: 2rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--accent) 0%, #818cf8 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin: 0;
+            letter-spacing: -1px;
+        }
+
+        .controls {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        /* Buttons */
+        .btn {
+            background-color: var(--card-bg);
+            color: var(--text-main);
+            padding: 10px 18px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn:hover {
+            background-color: #273548;
+            transform: translateY(-1px);
+        }
+
+        .btn-primary {
+            background-color: var(--accent);
+            color: #0f172a;
+            border-color: var(--accent);
+        }
+
+        .btn-primary:hover {
+            opacity: 0.9;
+            background-color: var(--accent);
+        }
+
+        .btn-ai {
+            background-color: var(--ai-color);
+            color: white;
+            border-color: var(--ai-color);
+        }
+
+        .btn-ai:hover {
+            opacity: 0.9;
+            background-color: var(--ai-color);
+        }
+
+        /* Search */
+        .search-box {
+            position: relative;
+        }
+
+        .search-input {
+            background: #1e293b;
+            border: 1px solid var(--border);
+            padding: 10px 16px;
+            border-radius: 8px;
+            color: white;
+            width: 250px;
+            font-size: 0.95rem;
+            transition: border-color 0.2s;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .search-results {
+            position: absolute;
+            top: 110%;
+            left: 0;
+            width: 100%;
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            max-height: 250px;
+            overflow-y: auto;
+            z-index: 20;
+            display: none;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+        }
+
+        .search-item {
+            padding: 12px 16px;
+            cursor: pointer;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .search-item:hover {
+            background: #273548;
+        }
+
+        /* Sync Progress */
+        .progress-bar {
+            height: 4px;
+            background: #334155;
+            width: 100%;
+            margin-top: 5px;
+            border-radius: 2px;
+            overflow: hidden;
+            display: none;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: var(--success);
+            width: 0%;
+            transition: width 0.3s;
+        }
+
+        #syncStatus {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-bottom: 20px;
+            text-align: right;
+            min-height: 1.2em;
+        }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .tab-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            font-size: 1.1rem;
+            font-weight: 600;
+            padding: 10px 4px;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .tab-btn.active {
+            color: var(--text-main);
+        }
+
+        .tab-btn.active::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 3px;
+            background: var(--accent);
+            border-radius: 2px;
+        }
+
+        .tab-btn[data-target="ai"].active::after {
+            background: var(--ai-color);
+        }
+
+        .tab-btn[data-target="ai"]:hover {
+            color: var(--ai-color);
+        }
+
+        /* Card & Table */
+        .card {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            border: 1px solid var(--border);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        thead th {
+            text-align: left;
+            padding: 15px 20px;
+            color: var(--text-muted);
+            border-bottom: 1px solid var(--border);
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            background: #182234;
+        }
+
+        tbody td {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border);
+            vertical-align: middle;
+        }
+
+        tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        tbody tr:hover {
+            background-color: #273548;
+            cursor: pointer;
+        }
+
+        /* Badges */
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-weight: 700;
+            font-size: 0.85rem;
+            min-width: 40px;
+        }
+
+        .badge-score-high {
+            background: rgba(16, 185, 129, 0.15);
+            color: var(--success);
+        }
+
+        .badge-score-mid {
+            background: rgba(245, 158, 11, 0.15);
+            color: var(--warning);
+        }
+
+        .badge-score-low {
+            background: rgba(239, 68, 68, 0.15);
+            color: var(--danger);
+        }
+
+        .badge-ai {
+            background: rgba(168, 85, 247, 0.15);
+            color: var(--ai-color);
+            border: 1px solid rgba(168, 85, 247, 0.3);
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(4px);
+            justify-content: center;
+            align-items: center;
+            z-index: 50;
+        }
+
+        .modal.active {
+            display: flex;
+            animation: fadeIn 0.2s;
+        }
+
+        .modal-content {
+            background: var(--card-bg);
+            padding: 30px;
+            border-radius: 16px;
+            width: 90%;
+            max-width: 650px;
+            position: relative;
+            border: 1px solid var(--border);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+        }
+
+        .close-modal {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            cursor: pointer;
+            color: var(--text-muted);
+            font-size: 1.5rem;
+            transition: color 0.2s;
+        }
+
+        .close-modal:hover {
+            color: white;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-top: 25px;
+        }
+
+        .stat-box {
+            background: #273548;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 800;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            color: var(--text-muted);
+            font-size: 0.85rem;
+        }
+
+        /* AI Box */
+        .ai-box {
+            background: linear-gradient(135deg, rgba(168, 85, 247, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
+            border: 1px solid rgba(168, 85, 247, 0.3);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        .ai-confidence-high {
+            color: var(--success);
+        }
+
+        .ai-confidence-med {
+            color: var(--warning);
+        }
+
+        .ai-confidence-low {
+            color: var(--danger);
+        }
+
+        .chart-container {
+            height: 180px;
+            display: flex;
+            align-items: flex-end;
+            gap: 4px;
+            padding-bottom: 5px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .chart-bar {
+            flex: 1;
+            background: #64748b;
+            opacity: 0.6;
+            border-radius: 2px 2px 0 0;
+            position: relative;
+        }
+
+        .chart-bar:hover {
+            opacity: 1;
+            background: var(--accent);
+        }
+
+        .chart-bar:hover::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: white;
+            color: black;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            white-space: nowrap;
+            margin-bottom: 5px;
+            z-index: 10;
+        }
+
+        .loading {
+            padding: 50px;
+            text-align: center;
+            color: var(--text-muted);
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: scale(0.95);
+            }
+
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <h1>Smart Stock Selector <span
+                    style="font-size:0.4em; color:var(--ai-color); vertical-align:super; border:1px solid var(--ai-color); padding:1px 4px; border-radius:4px;">BETA
+                    2.0</span></h1>
+
+            <div class="controls">
+                <div class="search-box">
+                    <input type="text" class="search-input" placeholder="Search Ticker / Name..." id="searchInput">
+                    <div class="search-results" id="searchResults"></div>
+                </div>
+                <button class="btn btn-primary" onclick="triggerSync()">
+                    <span>🔄</span> Sync Data
+                </button>
+                <button class="btn" onclick="fetchData()">
+                    <span>⚡</span> Refresh
+                </button>
+            </div>
+        </header>
+
+        <div class="progress-bar" id="progressBar">
+            <div class="progress-fill" id="progressFill"></div>
+        </div>
+        <div id="syncStatus"></div>
+
+        <!-- TABS -->
+        <div class="tabs">
+            <button class="tab-btn active" data-target="technical" onclick="switchTab('technical')">🔥 Technical
+                Picks</button>
+            <button class="tab-btn" data-target="ai" onclick="switchTab('ai')">🤖 AI Ranking (Top 50)</button>
+        </div>
+
+        <!-- MAIN TABLE -->
+        <section class="card">
+            <div id="table-container">
+                <div class="loading">Loading...</div>
+            </div>
+        </section>
+    </div>
+
+    <!-- DETAILS MODAL -->
+    <div class="modal" id="detailsModal">
+        <div class="modal-content">
+            <span class="close-modal" onclick="closeModal()">&times;</span>
+
+            <div class="modal-header">
+                <div>
+                    <h2 id="modalTicker" style="margin:0">2330 台積電</h2>
+                    <div id="modalPrice" style="font-size:1.5rem; font-weight:bold; margin-top:5px;">$0.00</div>
+                </div>
+                <div class="badge badge-score-high" id="modalScoreBadge" style="font-size:1.5rem; padding:10px 20px;">90
+                </div>
+            </div>
+
+            <div class="chart-container" id="modalChart"></div>
+
+            <div class="ai-box">
+                <h4 style="margin:0 0 10px 0; color:var(--ai-color)">🎯 AI Sniper Prediction (20-Day, 3:1 R/R)</h4>
+                <div id="modalAI" style="font-size:2rem; font-weight:800; margin-bottom:5px;">0%</div>
+                <div id="modalAIConf" style="font-size:0.9rem; margin-bottom:10px;">Medium Confidence</div>
+                <div id="modalAITargets" style="display:flex; justify-content:center; gap:30px; margin:10px 0">
+                    <div><span style="color:var(--success)">🎯 Target:</span> <span id="modalTarget">$0</span></div>
+                    <div><span style="color:var(--danger)">🛡️ Stop:</span> <span id="modalStop">$0</span></div>
+                </div>
+                <small style="color:var(--text-muted)">Win = Hit +15% before -5% within 20 days (3:1 R/R)</small>
+            </div>
+
+            <div class="stats-grid" id="modalStats">
+                <!-- Populated by JS -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let CURRENT_TAB = 'technical'; // 'technical' or 'ai'
+
+        // --- Init ---
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchData();
+            pollSyncStatus();
+
+            // Search Debounce
+            let debounceTimer;
+            document.getElementById('searchInput').addEventListener('input', (e) => {
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(() => handleSearch(e.target.value), 300);
+            });
+        });
+
+        // --- Tabs ---
+        function switchTab(tab) {
+            CURRENT_TAB = tab;
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelector(`.tab-btn[data-target="${tab}"]`).classList.add('active');
+            fetchData();
+        }
+
+        // --- Fetch Data ---
+        async function fetchData() {
+            const container = document.getElementById('table-container');
+            container.innerHTML = '<div class="loading">Fetching market data...</div>';
+
+            // Map tab to API sort param
+            const sortParam = CURRENT_TAB === 'ai' ? 'ai' : 'score';
+
+            try {
+                const res = await fetch(`/api/top_picks?sort=${sortParam}`);
+                if (!res.ok) throw new Error("API Error");
+                const data = await res.json();
+                renderTable(data);
+            } catch (err) {
+                console.error(err);
+                container.innerHTML = '<div class="loading" style="color:var(--danger)">Failed to load data.<br>Ensure backend is running.</div>';
+            }
+        }
+
+        function renderTable(data) {
+            const container = document.getElementById('table-container');
+            if (data.length === 0) {
+                container.innerHTML = '<div class="loading">No stocks found. Try syncing data first.</div>';
+                return;
+            }
+
+            // Headers
+            let headers = `
+                <th>Ticker</th>
+                <th>Name</th>
+                <th>Close</th>
+                <th>Change</th>
+            `;
+            if (CURRENT_TAB === 'technical') {
+                headers += `<th>Trend</th><th>Momentum</th><th style="text-align:right">Rise Score</th>`;
+            } else {
+                headers += `<th>🎯 Target</th><th>🛡️ Stop</th><th>Confidence</th><th style="text-align:right">Win Prob</th>`;
+            }
+
+            let rows = data.map(item => {
+                const score = item.score;
+                const ai = item.ai_probability || 0;
+
+                // Color logic
+                let scoreClass = 'badge-score-low';
+                if (score.total_score >= 80) scoreClass = 'badge-score-high';
+                else if (score.total_score >= 60) scoreClass = 'badge-score-mid';
+
+                const changeColor = score.change_percent >= 0 ? 'var(--success)' : 'var(--danger)';
+                const changeSign = score.change_percent >= 0 ? '+' : '';
+
+                let extraCols = '';
+                if (CURRENT_TAB === 'technical') {
+                    extraCols = `
+                        <td>${score.trend_score.toFixed(0)}</td>
+                        <td>${score.momentum_score.toFixed(0)}</td>
+                        <td style="text-align:right"><span class="badge ${scoreClass}">${score.total_score.toFixed(0)}</span></td>
+                    `;
+                } else {
+                    let aiClass = 'var(--text-muted)';
+                    if (ai > 0.3) aiClass = 'var(--success)';
+                    else if (ai > 0.15) aiClass = 'var(--warning)';
+
+                    const pct = (ai * 100).toFixed(1) + '%';
+                    const targetP = item.ai_target_price || (score.last_price * 1.15).toFixed(2);
+                    const stopP = item.ai_stop_price || (score.last_price * 0.95).toFixed(2);
+                    extraCols = `
+                        <td style="color:var(--success)">$${parseFloat(targetP).toFixed(1)}</td>
+                        <td style="color:var(--danger)">$${parseFloat(stopP).toFixed(1)}</td>
+                        <td style="color:${aiClass}">${ai > 0.3 ? '🔥 High' : (ai > 0.15 ? '⚡ Med' : '💤 Low')}</td>
+                        <td style="text-align:right"><span class="badge badge-ai">${pct}</span></td>
+                    `;
+                }
+
+                return `
+                    <tr onclick="openDetail('${item.ticker}')">
+                        <td style="font-weight:bold; color:var(--accent)">${item.ticker}</td>
+                        <td style="color:white">${item.name}</td>
+                        <td>${score.last_price.toFixed(2)}</td>
+                        <td style="color:${changeColor}">${changeSign}${score.change_percent.toFixed(2)}%</td>
+                        ${extraCols}
+                    </tr>
+                `;
+            }).join('');
+
+            container.innerHTML = `
+                <table>
+                    <thead><tr>${headers}</tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            `;
+        }
+
+        // --- Modal ---
+        async function openDetail(ticker) {
+            const modal = document.getElementById('detailsModal');
+            document.getElementById('searchResults').style.display = 'none';
+            document.getElementById('searchInput').value = '';
+
+            modal.classList.add('active');
+
+            // Set Loading
+            document.getElementById('modalTicker').innerText = ticker;
+            document.getElementById('modalPrice').innerText = 'Loading...';
+            document.getElementById('modalAI').innerText = '...';
+            document.getElementById('modalChart').innerHTML = '';
+
+            try {
+                const res = await fetch(`/api/stock/${ticker}`);
+                const data = await res.json();
+
+                const score = data.score;
+                const ai = data.ai_probability || 0;
+
+                // Header
+                document.getElementById('modalTicker').innerText = `${data.ticker} ${score.name || ''}`; // Name might be missing in detail API
+                document.getElementById('modalPrice').innerText = `$${score.last_price.toFixed(2)}`;
+                document.getElementById('modalScoreBadge').innerText = score.total_score.toFixed(0);
+
+                // Color Badge
+                const b = document.getElementById('modalScoreBadge');
+                b.className = 'badge';
+                if (score.total_score >= 80) b.classList.add('badge-score-high');
+                else if (score.total_score >= 60) b.classList.add('badge-score-mid');
+                else b.classList.add('badge-score-low');
+
+                // AI
+                const aiEl = document.getElementById('modalAI');
+                const aiConf = document.getElementById('modalAIConf');
+                aiEl.innerText = (ai * 100).toFixed(1) + '%';
+
+                // Target / Stop prices
+                const targetP = data.ai_target_price || (score.last_price * 1.15);
+                const stopP = data.ai_stop_price || (score.last_price * 0.95);
+                document.getElementById('modalTarget').innerText = `$${parseFloat(targetP).toFixed(1)}`;
+                document.getElementById('modalStop').innerText = `$${parseFloat(stopP).toFixed(1)}`;
+
+                if (ai >= 0.3) {
+                    aiEl.style.color = 'var(--success)';
+                    aiConf.innerText = "🔥 High Confidence - Sniper Setup!";
+                    aiConf.className = 'ai-confidence-high';
+                } else if (ai >= 0.15) {
+                    aiEl.style.color = 'var(--warning)';
+                    aiConf.innerText = "⚡ Medium Confidence";
+                    aiConf.className = 'ai-confidence-med';
+                } else {
+                    aiEl.style.color = 'var(--text-muted)';
+                    aiConf.innerText = "💤 Low Confidence";
+                    aiConf.className = 'ai-confidence-low';
+                }
+
+                // Stats Grid
+                document.getElementById('modalStats').innerHTML = `
+                    <div class="stat-box">
+                        <div class="stat-value">${score.trend_score.toFixed(0)}</div>
+                        <div class="stat-label">Trend Score</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-value">${score.momentum_score.toFixed(0)}</div>
+                        <div class="stat-label">Momentum</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-value">${score.volatility_score.toFixed(0)}</div>
+                        <div class="stat-label">Volatility</div>
+                    </div>
+                `;
+
+                // Chart
+                const history = data.history;
+                if (history && history.length > 0) {
+                    const prices = history.map(h => h.close);
+                    const minP = Math.min(...prices);
+                    const maxP = Math.max(...prices);
+                    const range = maxP - minP || 1;
+
+                    const bars = history.map(h => {
+                        const hPct = ((h.close - minP) / range) * 80 + 10;
+                        return `<div class="chart-bar" style="height:${hPct}%" data-tooltip="${h.date}: ${h.close}"></div>`;
+                    }).join('');
+                    document.getElementById('modalChart').innerHTML = bars;
+                }
+
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        function closeModal() {
+            document.getElementById('detailsModal').classList.remove('active');
+        }
+
+        // --- Search ---
+        async function handleSearch(q) {
+            if (q.length < 2) {
+                document.getElementById('searchResults').style.display = 'none';
+                return;
+            }
+            const res = await fetch(`/api/stocks?q=${q}`);
+            const data = await res.json();
+            const div = document.getElementById('searchResults');
+
+            if (data.length) {
+                div.innerHTML = data.map(s =>
+                    `<div class="search-item" onclick="openDetail('${s.code}')">
+                        <span style="color:var(--accent); font-weight:bold">${s.code}</span> 
+                        <span style="color:white">${s.name}</span>
+                    </div>`
+                ).join('');
+                div.style.display = 'block';
+            } else {
+                div.innerHTML = '<div class="search-item">No results</div>';
+                div.style.display = 'block';
+            }
+        }
+
+        // --- Sync ---
+        async function triggerSync() {
+            if (!confirm("Start background sync (~10 mins)?")) return;
+            await fetch('/api/sync', { method: 'POST' });
+            pollSyncStatus();
+        }
+
+        async function pollSyncStatus() {
+            const bar = document.getElementById('progressBar');
+            const fill = document.getElementById('progressFill');
+            const txt = document.getElementById('syncStatus');
+
+            const timer = setInterval(async () => {
+                const res = await fetch('/api/sync/status');
+                const s = await res.json();
+
+                if (s.is_syncing || s.current > 0) {
+                    bar.style.display = 'block';
+                    const pct = s.total ? (s.current / s.total * 100) : 0;
+                    fill.style.width = pct + "%";
+                    txt.innerText = `Syncing... ${s.current} / ${s.total}`;
+                } else {
+                    txt.innerText = "";
+                }
+
+                if (!s.is_syncing && s.current > 0 && s.current >= s.total) { // Simple done check
+                    clearInterval(timer);
+                    txt.innerText = "Sync Done!";
+                    setTimeout(() => { bar.style.display = 'none'; txt.innerText = ''; fetchData(); }, 2000);
+                }
+            }, 2000);
+        }
+    </script>
+</body>
+
+</html>
