@@ -16,7 +16,7 @@
 * **前端 (Frontend)**: 原生 JS, HTML5, CSS3 (現代化玻璃擬態 UI)
 * **資料庫 (Database)**: SQLite (本地持久化存儲)
 * **技術分析 (Analysis)**: Pandas, NumPy, 包含 KD, RSI (Wilder's), MACD (Normalized), 布林通道, ATR 等指標
-* **人工智慧 (AI/ML)**: GradientBoostingClassifier (V2: 特徵標準化與不平衡處理)
+* **人工智慧 (AI/ML)**: Ensemble V3 (結合 GradientBoosting, RandomForest 與 MLP 深度學習模型)
 
 ## 🚀 快速上手 (Quick Start)
 
@@ -40,21 +40,21 @@ python backend/main.py
 
 *(同步過程約需 10-15 分鐘，請耐心等候)*
 
-### 3. AI 模型訓練
+### 3. 每日自動更新 (推薦)
 
-根據您下載的歷史資料訓練「狙擊手」預測模型：
-
-```bash
-python backend/train_ai.py
-```
-
-### 4. 重新計算評分
-
-根據最新的技術指標與 AI 模型，更新資料庫中的排名：
+直接執行自動化腳本，即可完成「資料同步 -> AI 訓練 -> 分數重算」所有流程：
 
 ```bash
-python backend/recalculate.py
+./daily_run.bat
 ```
+
+### 4. 分步手動執行 (選用)
+
+如果您想手動控制流程：
+
+1. **資料同步**: `python backend/main.py --sync`
+2. **AI 訓練**: `python backend/train_ai.py`
+3. **分數重算**: `python backend/recalculate.py`
 
 ### 5. 啟動儀表板
 
@@ -67,8 +67,10 @@ python backend/main.py
 ## 📊 核心功能
 
 * 🔥 **技術面精選 (Technical)**：基於 KD 黃金交叉、RSI 甜蜜點與布林壓縮的規則篩選。
-* 🤖 **AI 預測排名 (AI Ranking)**：顯示 AI 判定勝率最高的前 50 檔「狙擊手」潛力股。
+* 🤖 **AI 預測排名 (AI Ranking)**：顯示 Ensemble AI 判定勝率最高的前 50 檔「狙擊手」潛力股。
+* 📝 **AI 虛擬分析師**: 在股票詳情中提供自動生成的文字報告，解釋趨勢、動能與型態。
 * 🔍 **權威搜尋**: 輸入代號或名稱，即刻彈出股價走勢圖與深度評分分析。
+* ⚡ **信號強度**: 將 AI 信心度轉化為直觀的 "High/Med/Low" 訊號。
 * 🛡️ **風險防禦**: 自動為每檔股票計算建議的 **目標價 (Target)** 與 **停損價 (Stop)**。
 
 ## 📁 專案結構

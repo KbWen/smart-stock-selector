@@ -23,7 +23,9 @@ Utilizes Moving Average ribbons (SMA20, SMA60). Full points are awarded when the
 * **Bollinger Squeeze**: Detects periods of abnormally low volatility, often preceding explosive moves.
 * **Volume Breakout**: Filters for price moves supported by heavy institutional-grade volume (>1.5x MA20).
 
-## 2. The AI Sniper Model (Machine Learning V2)
+## 2. The AI Sniper Model (Machine Learning V3 - Ensemble)
+
+The V3 engine moves beyond a single classifier to an **Ensemble Voting** architecture, increasing stability and reducing prediction variance.
 
 Unlike "black box" models, our Sniper Model is trained with a specific exit strategy: **3:1 Risk/Reward**.
 
@@ -35,19 +37,28 @@ We label a "Win" ONLY if:
 2. Condition 1 is met **BEFORE** the price reaches a **-5%** stop loss.
 3. The outcome occurs within **20 trading days**.
 
-### Advanced Feature Engineering (V2 Optimization)
+* **Ensemble Learning (V3)**: 結合三種異質模型：
+  * **GradientBoosting**: 捕捉非線性技術面特徵。
+  * **RandomForest**: 提升模型魯棒性，減少過擬合。
+  * **MLP (Multi-Layer Perceptron)**: 引入深度學習結構，挖掘高維度特徵關聯。
+* **Feature Normalization**: MACD 與 MACD Hist 皆經過價格標準化 (`Indicator / Price`)。
+* **Class Weighting**: 針對獲利樣本稀缺 (15.58%) 的特性優化。
 
-* **Feature Normalization**: MACD 與 MACD Hist 皆經過價格標準化 (`Indicator / Price`)，消除股價絕對值對模型權重的影響。
-* **Indicator Refinement**: 引入均線斜率 (`SMA Slope`) 與股價偏離度 (`Price Distance`)，捕捉趨勢的斜率與支撐強度。
-* **Class Weighting**: 針對獲利樣本稀缺 (15.58%) 的特性，在訓練過程中施加類別權重，強制模型提升對「潛在贏家」的辨識召回率 (Recall)。
+## 3. AI 虛擬分析師 (Heuristic Explanation)
 
-## 3. Data Integrity & "No Look-ahead" Policy
+To solve the "black box" problem of AI, the system includes an explanation layer that maps technical scores to natural language insights:
+
+* **Trend Analysis**: Interprets SMA slopes to detect "Strong Uptrends" or "Support Tests".
+* **Momentum Logic**: Correlates RSI and KD to flag "Overheating" or "Fresh Bounce" scenarios.
+* **Form Patterns**: Detects Bollinger Squeezes and Volume spikes to explain the AI's "Signal Strength".
+
+## 4. Data Integrity & "No Look-ahead" Policy
 
 To prevent overfitting and survivorship bias:
 
 * **Time-Series Splitting**: We use strict historical splitting for training. The model never "sees" the future during its training phase.
 * **Normalized Features**: All price-based features are relative (percentages) to ensure the model generalizes across different stock price ranges (e.g., a $10 penny stock vs a $1000 blue chip).
 
-## 4. Conclusion
+## 5. Conclusion
 
 The Smart Stock Selector does not aim to trade often; it aims to trade **well**. By filtering for high-probability setups where the math of the "Sniper Strategy" is in the user's favor, it provides a disciplined framework for successful swing trading.

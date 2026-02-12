@@ -14,9 +14,12 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from core.data import fetch_stock_data, get_all_tw_stocks, save_score_to_db, get_top_scores_from_db, get_db_connection
 from core.analysis import (
     calculate_rise_score, calculate_rsi, calculate_macd, 
-    calculate_smas, calculate_kd, calculate_bollinger, calculate_atr
+    calculate_smas, calculate_kd, calculate_bollinger, calculate_atr,
+    generate_analysis_report
 )
 from core.ai import predict_prob
+
+from fastapi.responses import FileResponse
 
 app = FastAPI(title="Smart Stock Selector")
 
@@ -31,6 +34,10 @@ app.add_middleware(
 frontend_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "frontend")
 if not os.path.exists(frontend_path):
     os.makedirs(frontend_path)
+
+@app.get("/")
+async def read_index():
+    return FileResponse(os.path.join(frontend_path, "index.html"))
 
 app.mount("/static", StaticFiles(directory=frontend_path, html=True), name="static")
 
@@ -157,6 +164,15 @@ def get_stock_detail(ticker: str):
     df = compute_all_indicators(df)
     
     score = calculate_rise_score(df)
+    
+    # --- Text Analysis ---
+    prev_row = df.iloc[-2] if len(df) > 1 else df.iloc[-1]
+    analysis_report = generate_analysis_report(
+        df.iloc[-1], prev_row, 
+        score['trend_score'], score['momentum_score'], score['volatility_score']
+    )
+    score['analysis'] = analysis_report
+    
     ai_prob = predict_prob(df)
     
     # Save latest calculation to DB
@@ -179,10 +195,20 @@ def get_stock_detail(ticker: str):
     }
 
 if __name__ == "__main__":
-    try:
-        get_cached_stocks()
-    except:
-        pass
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--sync", action="store_true", help="Run sync and exit")
+    args = parser.parse_args()
+    
+    if args.sync:
+        print("Starting Sync-Only Mode...")
+        run_sync_task()
+        print("Sync Complete.")
+    else:
+        try:
+            get_cached_stocks()
+        except:
+            pass
 
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+        import uvicorn
+        uvicorn.run(app, host="0.0.0.0", port=8000)

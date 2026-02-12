@@ -9,7 +9,8 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from core.data import get_db_connection, save_score_to_db, load_from_db
 from core.analysis import (
     calculate_rise_score, calculate_rsi, calculate_macd, 
-    calculate_smas, calculate_kd, calculate_bollinger, calculate_atr
+    calculate_smas, calculate_kd, calculate_bollinger, calculate_atr,
+    generate_analysis_report
 )
 from core.ai import predict_prob
 
@@ -49,6 +50,14 @@ def recalculate_all():
             
             # 1. Rise Score (Rule-Based)
             score = calculate_rise_score(df)
+            
+            # --- Text Analysis ---
+            prev_row = df.iloc[-2] if len(df) > 1 else df.iloc[-1]
+            analysis_report = generate_analysis_report(
+                df.iloc[-1], prev_row, 
+                score['trend_score'], score['momentum_score'], score['volatility_score']
+            )
+            score['analysis'] = analysis_report # Embed report in score dict
             
             # 2. AI Probability (ML)
             ai_prob = predict_prob(df)
