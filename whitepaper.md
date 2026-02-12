@@ -37,10 +37,10 @@ We label a "Win" ONLY if:
 2. Condition 1 is met **BEFORE** the price reaches a **-5%** stop loss.
 3. The outcome occurs within **20 trading days**.
 
-* **Ensemble Learning (V3)**: 結合三種異質模型：
-  * **GradientBoosting**: 捕捉非線性技術面特徵。
-  * **RandomForest**: 提升模型魯棒性，減少過擬合。
-  * **MLP (Multi-Layer Perceptron)**: 引入深度學習結構，挖掘高維度特徵關聯。
+* **Ensemble Learning (V3)**: 結合三種異質模型，採 **等權重投票法 (Equal Weighting 1/3 each)**：
+  * **GradientBoosting**: 專注於殘差學習，捕捉複雜的非線性趨勢。
+  * **RandomForest**: 採用 200 棵決策樹，增加模型魯棒性。
+  * **MLP (Multi-Layer Perceptron)**: (128, 64) 雙層神經網路，挖掘深層特徵關聯。
 * **Feature Normalization**: MACD 與 MACD Hist 皆經過價格標準化 (`Indicator / Price`)。
 * **Class Weighting**: 針對獲利樣本稀缺 (15.58%) 的特性優化。
 
