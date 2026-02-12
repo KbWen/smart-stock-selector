@@ -180,9 +180,9 @@ def train_and_save(all_dfs):
     print("Training RandomForest...")
     from sklearn.ensemble import RandomForestClassifier
     clf_rf = RandomForestClassifier(
-        n_estimators=100,
-        max_depth=7,
-        min_samples_split=10,
+        n_estimators=200,    # Tuned: Increased from 100
+        max_depth=10,        # Tuned: Increased from 7
+        min_samples_split=5, # Tuned: Decreased from 10
         random_state=42,
         class_weight='balanced'
     )
@@ -197,17 +197,18 @@ def train_and_save(all_dfs):
     clf_mlp = make_pipeline(
         StandardScaler(),
         MLPClassifier(
-            hidden_layer_sizes=(64, 32),
+            hidden_layer_sizes=(128, 64), # Tuned: Deeper/Wider
             activation='relu',
             solver='adam',
-            alpha=0.001,
-            max_iter=500,
+            alpha=0.0001, # Tuned: Less regularization
+            max_iter=1000,
+            early_stopping=True,
             random_state=42
         )
     )
     clf_mlp.fit(X_all, y_all)
-
-    # Save all models
+    
+    # ... (save logic same) ...
     ensemble_model = {
         'gb': clf_gb,
         'rf': clf_rf,
@@ -289,17 +290,30 @@ def predict_prob(df):
     try:
         if isinstance(model_data, dict):
             # Ensemble (Manual Voting)
-            probs = []
+            probs = {}
+            total = 0
+            count = 0
             for name, clf in model_data.items():
-                p = clf.predict_proba(X_single)[0][1]
-                probs.append(p)
-            win_prob = float(np.mean(probs))
+                p = float(clf.predict_proba(X_single)[0][1])
+                probs[name] = p
+                total += p
+                count += 1
+            
+            win_prob = total / count if count > 0 else 0
+            
+            return {
+                "prob": win_prob,
+                "details": probs
+            }
         else:
             # Legacy single model
             prob = model_data.predict_proba(X_single)[0]
             win_prob = float(prob[1]) if len(prob) > 1 else 0.0
+            return {
+                "prob": win_prob,
+                "details": {"legacy": win_prob}
+            }
             
-        return win_prob
     except Exception:
         return None
 

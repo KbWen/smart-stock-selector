@@ -60,7 +60,13 @@ def recalculate_all():
             score['analysis'] = analysis_report # Embed report in score dict
             
             # 2. AI Probability (ML)
-            ai_prob = predict_prob(df)
+            ai_result = predict_prob(df)
+            ai_prob = 0.0
+            if isinstance(ai_result, dict):
+                ai_prob = ai_result.get('prob', 0.0)
+                score['ai_details'] = ai_result.get('details', {})
+            else:
+                ai_prob = ai_result
             
             # Save all stocks that have any signal
             save_score_to_db(ticker, score, ai_prob)

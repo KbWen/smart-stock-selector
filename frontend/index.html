@@ -314,6 +314,10 @@
             border-radius: 16px;
             width: 90%;
             max-width: 650px;
+            max-height: 85vh;
+            /* NEW: Max height */
+            overflow-y: auto;
+            /* NEW: Scrollable */
             position: relative;
             border: 1px solid var(--border);
             box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
@@ -494,11 +498,10 @@
 
             <div class="modal-header">
                 <div>
-                    <h2 id="modalTicker" style="margin:0">2330 台積電</h2>
+                    <h2 id="modalTicker" style="margin:0">Ticker</h2>
                     <div id="modalPrice" style="font-size:1.5rem; font-weight:bold; margin-top:5px;">$0.00</div>
                 </div>
-                <div class="badge badge-score-high" id="modalScoreBadge" style="font-size:1.5rem; padding:10px 20px;">90
-                </div>
+                <div class="badge" id="modalScoreBadge" style="font-size:1.5rem; padding:10px 20px;">0</div>
             </div>
 
             <div class="chart-container" id="modalChart"></div>
@@ -506,12 +509,24 @@
             <div class="ai-box">
                 <h4 style="margin:0 0 10px 0; color:var(--ai-color)">🎯 AI Sniper Prediction (20-Day, 3:1 R/R)</h4>
                 <div id="modalAI" style="font-size:2rem; font-weight:800; margin-bottom:5px;">0%</div>
-                <div id="modalAIConf" style="font-size:0.9rem; margin-bottom:10px;">Medium Confidence</div>
+                <div id="modalAIConf" style="font-size:0.9rem; margin-bottom:10px;">Waiting...</div>
+
+                <!-- NEW: AI Consensus Details -->
+                <div id="modal-ai-breakdown"
+                    style="display: flex; gap: 8px; justify-content: center; margin: 15px 0; flex-wrap: wrap;"></div>
+
                 <div id="modalAITargets" style="display:flex; justify-content:center; gap:30px; margin:10px 0">
                     <div><span style="color:var(--success)">🎯 Target:</span> <span id="modalTarget">$0</span></div>
                     <div><span style="color:var(--danger)">🛡️ Stop:</span> <span id="modalStop">$0</span></div>
                 </div>
                 <small style="color:var(--text-muted)">Win = Hit +15% before -5% within 20 days (3:1 R/R)</small>
+            </div>
+
+            <div class="stat-box" style="text-align: left; margin-bottom: 20px;">
+                <h4 style="margin:0 0 10px 0; color:white;">🤖 AI Analyst Report</h4>
+                <div id="modal-analysis" style="font-size: 0.9rem; line-height: 1.6; color: var(--text-muted);">
+                    Loading report...
+                </div>
             </div>
 
             <div class="stats-grid" id="modalStats">
@@ -574,13 +589,19 @@
             let headers = `
                 <th>Ticker</th>
                 <th>Name</th>
-                <th>Close</th>
+                <th>Price</th>
                 <th>Change</th>
             `;
-            if (CURRENT_TAB === 'technical') {
-                headers += `<th>Trend</th><th>Momentum</th><th style="text-align:right">Rise Score</th>`;
+            if (CURRENT_TAB === 'ai') {
+                headers += `
+                    <th><i class="fas fa-bullseye"></i> Target</th>
+                    <th><i class="fas fa-hand-paper"></i> Stop</th>
+                    <th><i class="fas fa-ruler-combined"></i> Rise Score</th>
+                    <th><i class="fas fa-signal"></i> Signal</th>
+                    <th><i class="fas fa-brain"></i> AI Prob</th>
+                `;
             } else {
-                headers += `<th>🎯 Target</th><th>🛡️ Stop</th><th>Signal Strength</th><th style="text-align:right">Win Prob</th>`;
+                headers += `<th>Trend</th><th>Momentum</th><th style="text-align:right">Rise Score</th>`;
             }
 
             let rows = data.map(item => {
@@ -610,9 +631,16 @@
                     const pct = (ai * 100).toFixed(1) + '%';
                     const targetP = item.ai_target_price || (score.last_price * 1.15).toFixed(2);
                     const stopP = item.ai_stop_price || (score.last_price * 0.95).toFixed(2);
+                    // Rise Score Logic (Color scaling)
+                    const riseScore = score.total_score || 0;
+                    let riseColor = 'var(--text-muted)';
+                    if (riseScore >= 80) riseColor = 'var(--success)';
+                    else if (riseScore >= 60) riseColor = 'var(--warning)';
+
                     extraCols = `
                         <td style="color:var(--success)">$${parseFloat(targetP).toFixed(1)}</td>
                         <td style="color:var(--danger)">$${parseFloat(stopP).toFixed(1)}</td>
+                        <td style="color:${riseColor}; font-weight:bold;">${riseScore}</td>
                         <td style="color:${aiClass}">${ai > 0.3 ? '🔥 High' : (ai > 0.15 ? '⚡ Med' : '💤 Low')}</td>
                         <td style="text-align:right"><span class="badge badge-ai">${pct}</span></td>
                     `;
@@ -651,7 +679,8 @@
             document.getElementById('modalAI').innerText = '...';
             document.getElementById('modalChart').innerHTML = '';
             document.getElementById('modalStats').innerHTML = '';
-            if (document.getElementById('modalAnalysis')) document.getElementById('modalAnalysis').innerHTML = 'Generating report...';
+            document.getElementById('modal-analysis').innerText = 'Generating report...';
+            document.getElementById('modal-ai-breakdown').innerHTML = '';
 
             try {
                 const res = await fetch(`/api/stock/${ticker}`);
@@ -698,25 +727,38 @@
                     aiConf.className = 'ai-confidence-low';
                 }
 
-                // AI Analyst Report
-                const reportHtml = `
-                    <div style="background:#1e293b; border:1px solid var(--border); border-radius:8px; padding:15px; margin-bottom:20px;">
-                        <h4 style="margin:0 0 10px 0; color:white;">🤖 AI Analyst Report</h4>
-                        <div style="font-size:0.9rem; line-height:1.6; color:var(--text-muted);">
-                            <p style="margin:5px 0"><strong style="color:var(--accent)">Trend:</strong> ${analysis.trend}</p>
-                            <p style="margin:5px 0"><strong style="color:var(--accent)">Momentum:</strong> ${analysis.momentum}</p>
-                            <p style="margin:5px 0"><strong style="color:var(--accent)">Setup:</strong> ${analysis.setup}</p>
-                        </div>
-                    </div>
-                `;
+                // AI Breakdown (NEW)
+                const breakdownContainer = document.getElementById('modal-ai-breakdown');
+                breakdownContainer.innerHTML = '';
+                const details = data.score.ai_details || {};
 
-                // Insert report before stats grid
-                if (!document.getElementById('modalAnalysis')) {
-                    const analysisDiv = document.createElement('div');
-                    analysisDiv.id = 'modalAnalysis';
-                    document.getElementById('modalStats').parentNode.insertBefore(analysisDiv, document.getElementById('modalStats'));
+                if (Object.keys(details).length > 0) {
+                    for (const [model, prob] of Object.entries(details)) {
+                        if (model === 'legacy') continue;
+                        const p = (prob * 100).toFixed(0);
+                        const barColor = prob > 0.6 ? 'var(--success)' : (prob > 0.5 ? 'var(--accent)' : 'var(--text-muted)');
+
+                        const item = document.createElement('div');
+                        item.style.padding = '4px 10px';
+                        item.style.background = 'rgba(255,255,255,0.05)';
+                        item.style.borderRadius = '6px';
+                        item.style.border = '1px solid var(--border)';
+                        item.style.textAlign = 'center';
+                        item.style.minWidth = '70px';
+                        item.innerHTML = `
+                            <div style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase;">${model}</div>
+                            <div style="font-size: 1rem; font-weight: bold; color: ${barColor};">${p}%</div>
+                        `;
+                        breakdownContainer.appendChild(item);
+                    }
                 }
-                document.getElementById('modalAnalysis').innerHTML = reportHtml;
+
+                // AI Analyst Report (Consolidated)
+                document.getElementById('modal-analysis').innerHTML = `
+                    <p style="margin:5px 0"><strong style="color:var(--accent)">Trend:</strong> ${analysis.trend}</p>
+                    <p style="margin:5px 0"><strong style="color:var(--accent)">Momentum:</strong> ${analysis.momentum}</p>
+                    <p style="margin:5px 0"><strong style="color:var(--accent)">Setup:</strong> ${analysis.setup}</p>
+                `;
 
                 // Stats Grid
                 document.getElementById('modalStats').innerHTML = `

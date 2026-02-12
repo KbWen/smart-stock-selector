@@ -173,7 +173,18 @@ def get_stock_detail(ticker: str):
     )
     score['analysis'] = analysis_report
     
-    ai_prob = predict_prob(df)
+    ai_result = predict_prob(df)
+    
+    ai_prob = 0.0
+    ai_details = {}
+    
+    if isinstance(ai_result, dict):
+        ai_prob = ai_result.get('prob', 0.0)
+        ai_details = ai_result.get('details', {})
+    elif isinstance(ai_result, float):
+        ai_prob = ai_result
+        
+    score['ai_details'] = ai_details
     
     # Save latest calculation to DB
     save_score_to_db(ticker, score, ai_prob)
