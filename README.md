@@ -1,81 +1,83 @@
-# Smart Stock Selector 🚀 AI Sniper Edition
+# 智慧選股大師 🚀 AI 狙擊手版 (Smart Stock Selector)
 
-A quantitative stock analysis dashboard and AI prediction engine for the Taiwan Stock Exchange (TWSE).
+這是一個專為台灣股市 (TWSE) 設計的技術分析儀表板與 AI 預測引擎。
 
-## 🎯 Core Philosophy: The "Sniper" Strategy
+## 🎯 核心理念：「狙擊手」策略
 
-Unlike traditional models that predict simple price direction, this system employs a **3:1 Risk/Reward Sniper Strategy**.
+不同於單純預測漲跌的傳統模型，本系統採用 **3:1 損益比狙擊策略**。
 
-* **Win Condition**: Price gains **+15%** within 20 trading days **BEFORE** hitting a **-5%** stop loss.
-* **Target**: The AI identifies "Golden Setups" where the probability of reaching the profit target is significantly higher than hitting the stop loss.
-* **Result**: A highly selective, capital-preserving approach to swing trading.
+* **獲利條件 (Win)**：在 20 個交易日內，股價先觸及 **+15%** (獲利點)，且過程中 **未曾** 觸及 **-5%** (停損點)。
+* **AI 目標**：識別出「黃金勝率」的進場時機，即獲利機率遠高於停損機率的訊號。
+* **核心價值**：極度挑剔的策略，旨在保護本金的同時追求高爆發性成長。
 
-## 🛠️ Tech Stack
+## 🛠️ 技術棧
 
-* **Backend**: FastAPI (Python)
-* **Frontend**: Vanilla JS, HTML5, CSS3 (Modern Glassmorphism UI)
-* **Database**: SQLite (Persistent local storage)
-* **Analysis**: Pandas, NumPy, TA indicators (KD, RSI, MACD, Bollinger Bands, ATR)
-* **AI/ML**: GradientBoostingClassifier (Scikit-Learn)
+* **後端 (Backend)**: FastAPI (Python)
+* **前端 (Frontend)**: 原生 JS, HTML5, CSS3 (現代化玻璃擬態 UI)
+* **資料庫 (Database)**: SQLite (本地持久化存儲)
+* **技術分析 (Analysis)**: Pandas, NumPy, 包含 KD, RSI, MACD, 布林通道, ATR 等指標
+* **人工智慧 (AI/ML)**: GradientBoostingClassifier (Scikit-Learn)
 
-## 🚀 Getting Started
+## 🚀 快速上手 (Quick Start)
 
-### 1. Installation
+### 1. 安裝環境
+
+確保您的電腦已安裝 Python，然後執行：
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 2. Data Sync
+### 2. 資料同步 (資料庫初始化)
 
-Initialize the local database by downloading historical data for all TWSE stocks:
+下載台股約 1000 檔股票的歷史資料到本地資料庫：
 
 ```bash
-# Via Web UI: Click "Sync Data" 
-# OR via Code:
+# 方法 A: 啟動後在網頁點擊 "Sync Data" 按鈕
+# 方法 B: 直接執行伺服器程式碼 (伺服器啟動後才能同步)
 python backend/main.py
 ```
 
-*(Syncing ~1000 stocks takes approx. 10-15 minutes)*
+*(同步過程約需 10-15 分鐘，請耐心等候)*
 
-### 3. AI Training
+### 3. AI 模型訓練
 
-Train the Sniper model on your local data:
+根據您下載的歷史資料訓練「狙擊手」預測模型：
 
 ```bash
 python backend/train_ai.py
 ```
 
-### 4. Recalculate Scores
+### 4. 重新計算評分
 
-Update the dashboard with latest technical scores and AI probabilities:
+根據最新的技術指標與 AI 模型，更新資料庫中的排名：
 
 ```bash
 python backend/recalculate.py
 ```
 
-### 5. Launch Dashboard
+### 5. 啟動儀表板
 
 ```bash
 python backend/main.py
 ```
 
-Visit: `http://localhost:8000/static/index.html`
+訪問網址：`http://localhost:8000/static/index.html`
 
-## 📊 Features
+## 📊 核心功能
 
-* 🔥 **Technical Picks**: Rule-based screening using KD, RSI, and Bollinger Squeeze.
-* 🤖 **AI Ranking**: Top 50 stocks sorted by Sniper Win Probability.
-* 🔍 **Smart Search**: Search by ticker or name with real-time detail modal.
-* 🛡️ **Risk Management**: Automatic calculation of Target and Stop prices.
+* 🔥 **技術面精選 (Technical)**：基於 KD 黃金交叉、RSI 甜蜜點與布林壓縮的規則篩選。
+* 🤖 **AI 預測排名 (AI Ranking)**：顯示 AI 判定勝率最高的前 50 檔「狙擊手」潛力股。
+* 🔍 **權威搜尋**: 輸入代號或名稱，即刻彈出股價走勢圖與深度評分分析。
+* 🛡️ **風險防禦**: 自動為每檔股票計算建議的 **目標價 (Target)** 與 **停損價 (Stop)**。
 
-## 📁 Project Structure
+## 📁 專案結構
 
-* `backend/`: FastAPI endpoints and background tasks.
-* `core/`: Core logic for data fetching (`data.py`), technical analysis (`analysis.py`), and AI (`ai.py`).
-* `frontend/`: Responsive dashboard files.
-* `storage.db`: Local SQLite database (Auto-generated).
+* `backend/`: FastAPI 接口與背景同步邏輯。
+* `core/`: 核心邏輯，包含資料抓取 (`data.py`)、技術指標 (`analysis.py`)、與 AI 模型 (`ai.py`)。
+* `frontend/`: 響應式儀表板前端檔案。
+* `storage.db`: 本地 SQLite 資料庫 (自動生成)。
 
-## 📜 License
+## 📜 授權條款
 
-MIT
+MIT License
