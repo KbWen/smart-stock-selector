@@ -483,6 +483,12 @@
             <button class="tab-btn" data-target="ai" onclick="switchTab('ai')">🤖 AI Ranking (Top 50)</button>
         </div>
 
+        <!-- NEW: Definition / Transparency Card -->
+        <div id="definition-card"
+            style="background: rgba(56, 189, 248, 0.05); border: 1px solid rgba(56, 189, 248, 0.2); border-radius: 12px; padding: 15px; margin-bottom: 20px; font-size: 0.85rem; color: var(--text-muted); line-height: 1.5;">
+            <!-- Filled by JS based on Tab -->
+        </div>
+
         <!-- MAIN TABLE -->
         <section class="card">
             <div id="table-container">
@@ -540,6 +546,7 @@
 
         // --- Init ---
         document.addEventListener('DOMContentLoaded', () => {
+            updateDefinitionCard();
             fetchData();
             pollSyncStatus();
 
@@ -556,7 +563,45 @@
             CURRENT_TAB = tab;
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
             document.querySelector(`.tab-btn[data-target="${tab}"]`).classList.add('active');
+            updateDefinitionCard();
             fetchData();
+        }
+
+        function updateDefinitionCard() {
+            const card = document.getElementById('definition-card');
+            if (CURRENT_TAB === 'technical') {
+                card.style.borderColor = 'rgba(56, 189, 248, 0.2)';
+                card.style.background = 'rgba(56, 189, 248, 0.05)';
+                card.innerHTML = `
+                    <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+                        <div style="flex: 1; min-width: 200px;">
+                            <strong style="color: var(--accent); display: block; margin-bottom: 5px;">📊 Rise Score 算法定義 (Weight: 100%)</strong>
+                            本分數由三個維度組成，旨在篩選具備強大動能且即刻爆發潛力的個股。
+                        </div>
+                        <div style="flex: 2; display: flex; gap: 15px; flex-wrap: wrap;">
+                            <div><span style="color: var(--text-main)">📈 趨勢 (40%)</span>: 股價相對於 SMA20/60 的多頭排列強度。</div>
+                            <div><span style="color: var(--text-main)">🚀 動能 (30%)</span>: RSI (Wilder's) 強弱值與 KD 低檔金叉訊號。</div>
+                            <div><span style="color: var(--text-main)">🌀 型態 (30%)</span>: 布林通道壓縮 (Squeeze) 與 1.5x 爆量突破。</div>
+                        </div>
+                    </div>
+                `;
+            } else {
+                card.style.borderColor = 'rgba(168, 85, 247, 0.2)';
+                card.style.background = 'rgba(168, 85, 247, 0.05)';
+                card.innerHTML = `
+                    <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+                        <div style="flex: 1; min-width: 200px;">
+                            <strong style="color: var(--ai-color); display: block; margin-bottom: 5px;">🤖 Ensemble AI 預測邏輯 (Sniper Strategy)</strong>
+                            通過三個異質 ML 模型投票產生的共識勝率預測。
+                        </div>
+                        <div style="flex: 2; display: flex; gap: 15px; flex-wrap: wrap;">
+                            <div><span style="color: var(--text-main)">⚖️ 加權比例</span>: GB (1/3) + RF (1/3) + MLP (1/3) 等權重平均。</div>
+                            <div><span style="color: var(--text-main)">🎯 預測目標</span>: 20個交易日內達成 15% 獲利且未觸及 -5% 停損。</div>
+                            <div><span style="color: var(--text-main)">🧬 輸入特徵</span>: RSI, MACD, MACD Signal, SMA 20/60, KD, BB Width, BB Percent。</div>
+                        </div>
+                    </div>
+                `;
+            }
         }
 
         // --- Fetch Data ---
@@ -733,6 +778,19 @@
                 const details = data.score.ai_details || {};
 
                 if (Object.keys(details).length > 0) {
+                    const weightInfo = document.createElement('div');
+                    weightInfo.style.fontSize = '0.7rem';
+                    weightInfo.style.color = 'var(--text-muted)';
+                    weightInfo.style.marginBottom = '5px';
+                    weightInfo.innerHTML = '⚖️ Voting Consensus (Equal Weight 1/3 each)';
+                    breakdownContainer.appendChild(weightInfo);
+
+                    const itemsContainer = document.createElement('div');
+                    itemsContainer.style.display = 'flex';
+                    itemsContainer.style.gap = '10px';
+                    itemsContainer.style.justifyContent = 'center';
+                    itemsContainer.style.width = '100%';
+
                     for (const [model, prob] of Object.entries(details)) {
                         if (model === 'legacy') continue;
                         const p = (prob * 100).toFixed(0);
@@ -749,8 +807,9 @@
                             <div style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase;">${model}</div>
                             <div style="font-size: 1rem; font-weight: bold; color: ${barColor};">${p}%</div>
                         `;
-                        breakdownContainer.appendChild(item);
+                        itemsContainer.appendChild(item);
                     }
+                    breakdownContainer.appendChild(itemsContainer);
                 }
 
                 // AI Analyst Report (Consolidated)
@@ -762,16 +821,16 @@
 
                 // Stats Grid
                 document.getElementById('modalStats').innerHTML = `
-                    <div class="stat-box">
-                        <div class="stat-value">${score.trend_score.toFixed(0)}</div>
+                    <div class="stat-box" title="Based on Price vs SMA 20/60 (Max: 40)">
+                        <div class="stat-value">${score.trend_score.toFixed(0)}<span style="font-size:0.7rem; color:var(--text-muted)">/40</span></div>
                         <div class="stat-label">Trend Score</div>
                     </div>
-                    <div class="stat-box">
-                        <div class="stat-value">${score.momentum_score.toFixed(0)}</div>
+                    <div class="stat-box" title="Based on RSI Wilder & KD Golden Cross (Max: 30)">
+                        <div class="stat-value">${score.momentum_score.toFixed(0)}<span style="font-size:0.7rem; color:var(--text-muted)">/30</span></div>
                         <div class="stat-label">Momentum</div>
                     </div>
-                    <div class="stat-box">
-                        <div class="stat-value">${score.volatility_score.toFixed(0)}</div>
+                    <div class="stat-box" title="Based on BB Squeeze & Volume Breakthrough (Max: 30)">
+                        <div class="stat-value">${score.volatility_score.toFixed(0)}<span style="font-size:0.7rem; color:var(--text-muted)">/30</span></div>
                         <div class="stat-label">Volatility</div>
                     </div>
                 `;
