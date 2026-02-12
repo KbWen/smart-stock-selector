@@ -44,6 +44,25 @@ We label a "Win" ONLY if:
 * **Feature Normalization**: MACD 與 MACD Hist 皆經過價格標準化 (`Indicator / Price`)。
 * **Class Weighting**: 針對獲利樣本稀缺 (15.58%) 的特性優化。
 
+### AI Sniper Strategy Visualization
+
+```mermaid
+graph LR
+    subgraph "Sniper Conditions (20 Days)"
+    Price[Current Price] --> Target["Target: +15% (Hit = Win)"]
+    Price --> Stop["Stop: -5% (Hit = Loss)"]
+    end
+    
+    subgraph "Ensemble V3 Consensus"
+    GB[Gradient Boosting]
+    RF[Random Forest]
+    MLP[Neural Network]
+    end
+    
+    GB & RF & MLP --> Vote{Voting & Averaging}
+    Vote --> Result[High/Med/Low Signal]
+```
+
 ## 3. AI 虛擬分析師 (Heuristic Explanation)
 
 To solve the "black box" problem of AI, the system includes an explanation layer that maps technical scores to natural language insights:

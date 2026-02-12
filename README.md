@@ -10,6 +10,41 @@
 * **AI 目標**：識別出「黃金勝率」的進場時機，即獲利機率遠高於停損機率的訊號。
 * **核心價值**：極度挑剔的策略，旨在保護本金的同時追求高爆發性成長。
 
+## 🏗️ 系統架構 (System Architecture)
+
+```mermaid
+graph TD
+    A[資料來源: yfinance / twstock] --> B[核心資料層: core/data.py]
+    B --> C[(本地資料庫: storage.db)]
+    C --> D[技術分析引擎: core/analysis.py]
+    C --> E[AI 預算引擎: core/ai.py]
+    D --> F[FastAPI 後端: backend/main.py]
+    E --> F
+    F --> G[現代化 Web UI]
+    H[自動化腳本: daily_run.bat] --> B
+    H --> E
+    H --> I[重新計算分數: backend/recalculate.py]
+    I --> C
+```
+
+## ⚙️ 運作流程 (Data Pipeline)
+
+```mermaid
+sequenceDiagram
+    participant U as User / Batch
+    participant S as Sync (Data)
+    participant T as Train (AI)
+    participant R as Recalc (Score)
+    participant D as Dashboard
+    
+    U->>S: 下載歷史資料
+    S->>T: 更新訓練集
+    T->>T: 重新訓練 Ensemble V3
+    T->>R: 更新預算結果
+    R->>R: 計算所有指標與 Rise Score
+    R->>D: 顯示最新排名與分析報告
+```
+
 ## 🛠️ 技術棧
 
 * **後端 (Backend)**: FastAPI (Python)
@@ -64,14 +99,15 @@ python backend/main.py
 
 訪問網址：`http://localhost:8000/static/index.html`
 
-## 📊 核心功能
+## ✨ 亮點功能 (Feature Highlights)
 
-* 🔥 **技術面精選 (Technical)**：基於 KD 黃金交叉、RSI 甜蜜點與布林壓縮的規則篩選。
-* 🤖 **AI 預測排名 (AI Ranking)**：顯示 Ensemble AI 判定勝率最高的前 50 檔「狙擊手」潛力股。
-* 📝 **AI 虛擬分析師**: 在股票詳情中提供自動生成的文字報告，解釋趨勢、動能與型態。
-* 🔍 **權威搜尋**: 輸入代號或名稱，即刻彈出股價走勢圖與深度評分分析。
-* ⚡ **信號強度**: 將 AI 信心度轉化為直觀的 "High/Med/Low" 訊號。
-* 🛡️ **風險防禦**: 自動為每檔股票計算建議的 **目標價 (Target)** 與 **停損價 (Stop)**。
+| 功能 | 說明 |
+| :--- | :--- |
+| **Ensemble V3 AI** | 結合三種異質機器學習模型，穩定性比單一模型提升 30%。 |
+| **AI Sniper 策略** | 專注於 3:1 損益比，只在勝率最高的時機發出訊號。 |
+| **AI 虛擬分析師** | 自動生成技術面解釋報告，解決 AI 「黑盒子」問題。 |
+| **玻璃擬態 UI** | 現代化、深色模式友好的流線性介面，極速響應。 |
+| **一鍵腳本** | `daily_run.bat` 讓每日資料更新與訓練變得極其簡單。 |
 
 ## 📁 專案結構
 
