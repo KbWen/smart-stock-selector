@@ -17,3 +17,8 @@ model_sniper.pkl
 # OS
 .DS_Store
 Thumbs.db
+
+# Private Template Files
+.agent/
+.cursorrules
+SYSTEM_INSTRUCTION.txt
