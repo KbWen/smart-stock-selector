@@ -837,7 +837,15 @@
                 let html = `
                     <div style="padding:20px; animation: fadeIn 0.5s;">
                         <h2 style="text-align:center; color:var(--text-main); margin-bottom:5px;">🧪 Simulation Result</h2>
-                        <p style="text-align:center; color:var(--text-muted); margin-bottom:20px;">Entry Date: ${data.simulated_date} (30 Days Ago)</p>
+                        <p style="text-align:center; color:var(--text-muted); margin-bottom:10px;">Entry Date: ${data.simulated_date} (30 Days Ago)</p>
+                        
+                        <div style="text-align:center; margin-bottom:20px;">
+                            <span class="badge" style="background:rgba(255,255,255,0.05); color:var(--text-muted); font-size:0.8rem; padding:5px 12px;">
+                                📊 Candidate Pool: ${data.candidate_pool_size || 'N/A'} stocks scanned
+                                <span style="margin:0 10px;">|</span>
+                                🎯 AI Range: ${(data.ai_prob_min || 0).toFixed(0)}% - ${(data.ai_prob_max || 0).toFixed(0)}%
+                            </span>
+                        </div>
 
                         <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:15px; margin-bottom:25px;">
                             <div class="stat-box" style="text-align:center; border: 1px solid ${summary.avg_return > 0 ? 'var(--success)' : 'var(--error)'}">
@@ -883,7 +891,10 @@
                     const retColor = p.actual_return > 0 ? 'var(--success)' : 'var(--error)';
                     html += `
                         <tr>
-                            <td><span style="font-weight:bold; color:var(--text-main)">${p.ticker}</span> <span style="color:var(--text-muted); font-size:0.9em">${p.name}</span></td>
+                            <td>
+                                <span style="font-weight:bold; color:var(--text-main)">${p.ticker}</span> 
+                                ${p.name && p.name !== p.ticker ? `<span style="color:var(--text-muted); font-size:0.9em">${p.name}</span>` : ''}
+                            </td>
                             <td>$${p.entry_price.toFixed(1)}</td>
                             <td>$${p.current_price.toFixed(1)}</td>
                             <td><span class="badge badge-ai">${(p.ai_prob_at_entry * 100).toFixed(0)}%</span></td>

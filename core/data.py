@@ -121,6 +121,14 @@ def get_all_tw_stocks():
             })
     return stocks
 
+def get_stock_name_from_db(ticker: str) -> str:
+    """Returns the name of a stock given its ticker."""
+    # First try twstock dictionary (fastest)
+    code_only = ticker.split('.')[0]
+    if code_only in twstock.codes:
+        return twstock.codes[code_only].name
+    return None
+
 def save_to_db(ticker, df):
     if df.empty: return
     
