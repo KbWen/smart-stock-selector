@@ -657,6 +657,36 @@
             </div>
         </div>
 
+        <!-- MANUAL MODAL -->
+        <div class="modal" id="manualModal">
+            <div class="modal-content" style="max-width: 600px;">
+                <span class="close-modal" onclick="closeManualModal()">&times;</span>
+                <div class="modal-header">
+                    <h2>🤖 Sniper Strategy Manual</h2>
+                </div>
+                <div style="padding: 10px 0; color: var(--text-muted); line-height: 1.6;">
+                    <p style="margin-bottom:15px;" id="manual-desc-modal"></p>
+
+                    <div
+                        style="background:rgba(255,255,255,0.03); padding:15px; border-radius:8px; margin-bottom:10px;">
+                        <b style="color: var(--success); font-size:1.1em;" id="tip-1-title-modal"></b>
+                        <div id="tip-1-desc-modal" style="margin-top:5px;"></div>
+                    </div>
+
+                    <div
+                        style="background:rgba(255,255,255,0.03); padding:15px; border-radius:8px; margin-bottom:10px;">
+                        <b style="color: var(--accent); font-size:1.1em;" id="tip-2-title-modal"></b>
+                        <div id="tip-2-desc-modal" style="margin-top:5px;"></div>
+                    </div>
+
+                    <div style="background:rgba(255,255,255,0.03); padding:15px; border-radius:8px;">
+                        <b style="color: var(--danger); font-size:1.1em;" id="tip-3-title-modal"></b>
+                        <div id="tip-3-desc-modal" style="margin-top:5px;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <script>
             let CURRENT_TAB = 'technical'; // 'technical' or 'ai'
             let abortController = null; // Global controller for cancelling requests
@@ -894,19 +924,7 @@
                     card.style.borderColor = 'rgba(168, 85, 247, 0.2)';
                     card.style.background = 'rgba(168, 85, 247, 0.05)';
 
-                    let sniperManual = `
-                    <div style="width: 100%; margin-top: 15px; display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; padding-top: 15px; border-top: 1px solid rgba(168, 85, 247, 0.1);">
-                        <div style="font-size: 0.8rem;">
-                            <b style="color: var(--success)">${i18n('tip_1_title')}</b>: ${i18n('tip_1_desc')}
-                        </div>
-                        <div style="font-size: 0.8rem;">
-                            <b style="color: var(--accent)">${i18n('tip_2_title')}</b>: ${i18n('tip_2_desc')}
-                        </div>
-                        <div style="font-size: 0.8rem;">
-                            <b style="color: var(--danger)">${i18n('tip_3_title')}</b>: ${i18n('tip_3_desc')}
-                        </div>
-                    </div>
-                `;
+                    // Removed inline sniperManual
 
                     card.innerHTML = `
                    <div style="display: flex; flex-direction: column; gap: 10px;">
@@ -925,13 +943,14 @@
                                 <label><input type="checkbox" id="chk-macd-bull" onchange="fetchSmartScan()"> MACD Flip</label>
                             </div>
                             ` : `
-                            <div style="flex: 2; display: flex; gap: 15px; font-size: 0.85rem; color: var(--text-muted);">
+                            <div style="flex: 2; display: flex; gap: 15px; font-size: 0.85rem; color: var(--text-muted); align-items: center; justify-content: flex-end;">
+                                <button class="btn" style="font-size:0.8rem; padding:4px 8px; margin-right:auto;" onclick="openManualModal()">📖 ${i18n('btn_manual') || 'Strategy Manual'}</button>
                                 🏷️ Model: <b style="color:var(--ai-color); margin-right: 15px;" id="model-version">Loading...</b>
                                 🕒 Last Sync: <b style="color:var(--text-main)" id="last-sync">--</b>
                             </div>
                             `}
                         </div>
-                        ${sniperManual}
+                        ${!isAI ? '' : ''} 
                     </div>
                 `;
                 } else {
@@ -1509,6 +1528,23 @@
 
             function closeModal() {
                 document.getElementById('detailsModal').classList.remove('active');
+            }
+
+            function openManualModal() {
+                // Populate text
+                document.getElementById('manual-desc-modal').innerText = i18n('manual_desc');
+                document.getElementById('tip-1-title-modal').innerText = i18n('tip_1_title');
+                document.getElementById('tip-1-desc-modal').innerText = i18n('tip_1_desc');
+                document.getElementById('tip-2-title-modal').innerText = i18n('tip_2_title');
+                document.getElementById('tip-2-desc-modal').innerText = i18n('tip_2_desc');
+                document.getElementById('tip-3-title-modal').innerText = i18n('tip_3_title');
+                document.getElementById('tip-3-desc-modal').innerText = i18n('tip_3_desc');
+
+                document.getElementById('manualModal').classList.add('active');
+            }
+
+            function closeManualModal() {
+                document.getElementById('manualModal').classList.remove('active');
             }
 
             // --- Search ---
