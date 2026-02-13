@@ -12,7 +12,7 @@ from core.analysis import (
     calculate_smas, calculate_kd, calculate_bollinger, calculate_atr,
     generate_analysis_report
 )
-from core.ai import predict_prob
+from core.ai import predict_prob, get_model_version
 
 def compute_all_indicators(df):
     """Compute ALL indicators needed for both Score and AI."""
@@ -69,7 +69,8 @@ def recalculate_all():
                 ai_prob = ai_result
             
             # Save all stocks that have any signal
-            save_score_to_db(ticker, score, ai_prob)
+            current_model_version = get_model_version()
+            save_score_to_db(ticker, score, ai_prob, model_version=current_model_version)
             updated += 1
                 
         except Exception as e:

@@ -15,6 +15,9 @@ STOP_LOSS = 0.05     # -5% stop loss
 
 MODEL_PATH = os.path.join(os.path.dirname(__file__), "../model_sniper.pkl")
 
+# Global variable to track the currently loaded model version
+CURRENT_MODEL_VERSION = "unknown"
+
 # ===== FEATURE ENGINEERING =====
 FEATURE_COLS = [
     'rsi', 'macd_rel', 'macd_hist_rel',
@@ -78,22 +81,39 @@ def prepare_features(df):
     
     df['kd_diff'] = df['k'] - df['d']
     
-    # --- SNIPER TARGET ---
+    # --- SNIPER TARGET (MULTI-LABEL) ---
+    # 2: Strong Buy (+15% before -5%)
+    # 1: Buy (+10% before -5%)
+    # 0: Hold (Default)
     targets = []
     for i in range(len(df)):
         entry_price = df.iloc[i]['close']
-        target_price = entry_price * (1 + TARGET_GAIN)
-        stop_price = entry_price * (1 - STOP_LOSS)
+        target_strong = entry_price * 1.15
+        target_buy = entry_price * 1.10
+        stop_price = entry_price * 0.95
         
         result = 0
         future = df.iloc[i+1 : i+1+PRED_DAYS]
         for _, day in future.iterrows():
-            if day['high'] >= target_price:
-                result = 1
-                break
+            # Check for Stop Loss FIRST to be conservative
             if day['low'] <= stop_price:
                 result = 0
                 break
+            
+            # Check for Strong Buy
+            if day['high'] >= target_strong:
+                result = 2  # Strong Buy
+                break
+                
+            # If not strong buy yet, check for Buy
+            if day['high'] >= target_buy:
+                # Need to keep looking to see if it hits Strong Buy before Stop Loss
+                # but for simplicity in this loop, if it hits 10% first, we label as 1
+                # and only upgrade if it hits 15% later IN THE SAME Loop.
+                # Actually, let's just mark the highest achieved target.
+                result = max(result, 1)
+                # We continue the loop to see if it reaches 2 (+15%)
+        
         targets.append(result)
     
     df['target'] = targets
@@ -110,6 +130,11 @@ def prepare_features(df):
     return df_clean[FEATURE_COLS], df_clean['target']
 
 
+def get_model_version():
+    """Returns the current model version string."""
+    return CURRENT_MODEL_VERSION
+
+from datetime import datetime
 def train_and_save(all_dfs):
     print("=" * 60)
     print("SNIPER AI - Training (Optimized V2: Normalized + Slopes)")
@@ -132,24 +157,33 @@ def train_and_save(all_dfs):
     y_all = pd.concat(y_list).reset_index(drop=True)
     X_all = X_all.replace([np.inf, -np.inf], np.nan).fillna(0)
     
-    win_rate = y_all.mean()
+    win_rate_2 = (y_all == 2).astype(float).mean()
+    win_rate_1 = (y_all == 1).astype(float).mean()
+    win_rate_0 = (y_all == 0).astype(float).mean()
+    
     print(f"Total samples: {len(X_all)}")
-    print(f"Win rate in data: {win_rate:.2%}")
+    print(f"Class Dist: StrongBuy(2): {win_rate_2:.1%}, Buy(1): {win_rate_1:.1%}, Hold(0): {win_rate_0:.1%}")
     
     # --- Time Series Split ---
     tscv = TimeSeriesSplit(n_splits=3)
     
-    # Imbalance handling: heavier weight for class 1
-    # Weight = 1 / frequency
-    w0 = 1.0 / (1.0 - win_rate)
-    w1 = 1.0 / win_rate
-    
+    # Imbalance handling: higher weight for win classes
+    # Use class_weight='balanced' or manual weights
+    # For simplicity, we'll let the models handle it or use a dict
+    class_weights = {
+        0: 1.0, 
+        1: 1.0 / (win_rate_1 if win_rate_1 > 0 else 1),
+        2: 2.0 / (win_rate_2 if win_rate_2 > 0 else 1) # Double weight for strong buy
+    }
+    # Normalize weights
+    total_w = sum(class_weights.values())
+    class_weights = {k: v/total_w * 3 for k, v in class_weights.items()}
     for fold, (train_idx, val_idx) in enumerate(tscv.split(X_all)):
         X_tr, X_val = X_all.iloc[train_idx], X_all.iloc[val_idx]
         y_tr, y_val = y_all.iloc[train_idx], y_all.iloc[val_idx]
         
         # Apply weights to training slice
-        weights_tr = y_tr.map({0: w0, 1: w1})
+        weights_tr = y_tr.map(class_weights)
         
         clf = GradientBoostingClassifier(
             n_estimators=150,
@@ -162,13 +196,13 @@ def train_and_save(all_dfs):
         
         y_pred = clf.predict(X_val)
         print(f"\n--- Fold {fold+1} ---")
-        print(classification_report(y_val, y_pred, target_names=['Loss/Timeout', 'Win (+15%)'], zero_division=0))
+        print(classification_report(y_val, y_pred, target_names=['Hold', 'Buy (+10%)', 'StrongBuy (+15%)'], zero_division=0))
     
     # --- ENSEMBLE TRAINING (Manual) ---
     # We train models separately because they handle weights differently.
     
     # Calculate weights for final model
-    final_weights = y_all.map({0: w0, 1: w1})
+    final_weights = y_all.map(class_weights)
     
     # 1. GradientBoosting (Uses sample_weight)
     print("\nTraining GradientBoosting...")
@@ -228,8 +262,20 @@ def train_and_save(all_dfs):
     except:
         pass
     
-    joblib.dump(ensemble_model, MODEL_PATH)
+    # --- SAVE WITH METADATA ---
+    model_metadata = {
+        'version': 'v4.0', # Ensemble V4
+        'trained_at': datetime.now().isoformat(),
+        'ensemble': ensemble_model,
+        'features': FEATURE_COLS
+    }
+    
+    joblib.dump(model_metadata, MODEL_PATH)
     print(f"\nSniper Ensemble (GB+RF+MLP) saved to {MODEL_PATH}")
+    
+    # Update global version
+    global CURRENT_MODEL_VERSION
+    CURRENT_MODEL_VERSION = 'v4.0'
     print("=" * 60)
 
 
@@ -237,8 +283,15 @@ def predict_prob(df):
     if not os.path.exists(MODEL_PATH):
         return None
     
+    global CURRENT_MODEL_VERSION
     try:
-        model_data = joblib.load(MODEL_PATH)
+        data = joblib.load(MODEL_PATH)
+        if isinstance(data, dict) and 'version' in data:
+            CURRENT_MODEL_VERSION = data['version']
+            model_data = data['ensemble']
+        else:
+            CURRENT_MODEL_VERSION = "legacy"
+            model_data = data
     except Exception:
         return None
     
@@ -305,30 +358,45 @@ def predict_prob(df):
     try:
         if isinstance(model_data, dict):
             # Ensemble (Manual Voting)
+            # Result is now multi-class [0, 1, 2]
             probs = {}
-            total = 0
+            total_prob = 0
             count = 0
             for name, clf in model_data.items():
-                p = float(clf.predict_proba(X_single)[0][1])
-                probs[name] = p
-                total += p
+                p_array = clf.predict_proba(X_single)[0]
+                # p_array order: [Prob(0), Prob(1), Prob(2)] if all classes exist in training
+                # To be safe, check length.
+                if len(p_array) == 3:
+                    # Combined probability of being a "Buy" or "Strong Buy"
+                    win_p = float(p_array[1] + p_array[2])
+                elif len(p_array) == 2:
+                    win_p = float(p_array[1])
+                else:
+                    win_p = 0.0
+                
+                probs[name] = win_p
+                total_prob += win_p
                 count += 1
             
-            win_prob = total / count if count > 0 else 0
+            final_win_prob = total_prob / count if count > 0 else 0
             
             return {
-                "prob": win_prob,
+                "prob": final_win_prob,
                 "details": probs
             }
         else:
             # Legacy single model
-            prob = model_data.predict_proba(X_single)[0]
-            win_prob = float(prob[1]) if len(prob) > 1 else 0.0
+            prob_vec = model_data.predict_proba(X_single)[0]
+            if len(prob_vec) >= 2:
+                win_prob = float(np.sum(prob_vec[1:]))
+            else:
+                win_prob = 0.0
             return {
                 "prob": win_prob,
                 "details": {"legacy": win_prob}
             }
             
-    except Exception:
+    except Exception as e:
+        print(f"Prediction Error: {e}")
         return None
 

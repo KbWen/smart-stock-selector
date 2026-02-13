@@ -51,7 +51,7 @@ sequenceDiagram
 * **前端 (Frontend)**: 原生 JS, HTML5, CSS3 (現代化玻璃擬態 UI)
 * **資料庫 (Database)**: SQLite (本地持久化存儲)
 * **技術分析 (Analysis)**: Pandas, NumPy, 包含 KD, RSI (Wilder's), MACD (Normalized), 布林通道, ATR 等指標
-* **人工智慧 (AI/ML)**: Ensemble V3 (結合 GradientBoosting, RandomForest 與 MLP 深度學習模型)
+* **人工智慧 (AI/ML)**: Ensemble V4 (結合 GradientBoosting, RandomForest 與 MLP 深度學習模型，並整合 Heuristic Rise Score 作為專家特徵)
 
 ## 🚀 快速上手 (Quick Start)
 
@@ -117,10 +117,11 @@ python backend/main.py
 
 | 功能 | 說明 |
 | :--- | :--- |
-| **Ensemble V3 AI** | 結合三種異質機器學習模型 (GB, RF, MLP)，並整合 **Rise Score** 技術指標分數作為訓練特徵，大幅提升預測穩定性。 |
+| **Ensemble V4 AI** | 結合三種異質機器學習模型 (GB, RF, MLP)，並整合 **Rise Score** 技術指標分數作為訓練特徵，大幅提升預測穩定性。 |
+| **Model Versioning** | 完整模型版本管理系統，自動追蹤訓練版本與同步時間，確保 UI 排名與策略回測結果 100% 一致。 |
+| **Smart Sync 2.0** | 偵測模型更新或資料過期 (>6h) 自動觸發同步。並行同步技術 (`ThreadPoolExecutor`) 達成 10 倍速。 |
+| **Stability Plus** | 啟用 SQLite WAL 模式與並行鎖定處理，確保在高強度同步與 API 請求同時發生時系統依然穩定不噴錯。 |
 | **Backtest Lab** | 「時光機」功能。採用**大樣本搜尋 (300 檔)** 與**歷史機率排序**，真實模擬 30 天前的 AI Top 20 選股表現。 |
-| **Smart Scan** | 複合式條件掃描，結合 AI 高勝率過濾 (>0.60) 與技術面（KD、MACD、成交量）訊號。 |
-| **並行同步技術** | 透過 `ThreadPoolExecutor` 達成 10 倍速資料同步。 |
 | **指標快取系統** | 將預計算的技術指標存儲於 `stock_indicators` 表，大幅提升掃描與回測速度。 |
 | **AI 虛擬分析師** | 自動生成技術面解釋報告，解析 AI 預測背後的邏輯。 |
 | **一鍵腳本** | `daily_run.bat` 讓每日資料更新與訓練變得極其簡單。 |

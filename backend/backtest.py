@@ -42,8 +42,8 @@ def run_time_machine(days_ago=30, limit=20):
     # We increase the limit significantly (e.g. 300) to find the "True Top 20" from 30 days ago.
     from core.data import get_top_scores_from_db
     
-    # Get 300 candidates to ensure we find those that were "Hot" 30 days ago
-    candidates = get_top_scores_from_db(limit=300, sort_by='ai')
+    # Get 500 candidates to ensure we find those that were "Hot" 30 days ago
+    candidates = get_top_scores_from_db(limit=500, sort_by='ai')
     
     if not candidates:
         # Fallback if DB is empty (first run)
@@ -75,19 +75,21 @@ def run_time_machine(days_ago=30, limit=20):
             df_full = fetch_stock_data(ticker, days=300, force_download=False)
             
             if df_full.empty or len(df_full) < (60 + days_ago):
-                print(f"⚠️ Skipping {ticker}: Insufficient data ({len(df_full)} rows)")
                 return None
                 
             current_price = df_full.iloc[-1]['close']
             df_past = df_full.iloc[:-days_ago].copy()
             
             if df_past.empty or len(df_past) < 60:
-                print(f"⚠️ Skipping {ticker}: Past slice too small ({len(df_past)} rows)")
                 return None
                 
             entry_date = df_past.iloc[-1]['date']
             simulated_date = entry_date.strftime('%Y-%m-%d') if hasattr(entry_date, 'strftime') else str(entry_date)
             entry_price = df_past.iloc[-1]['close']
+            
+            # --- STRATEGY FILTER: MIN PRICE $15 ---
+            if entry_price < 15:
+                return None
             
             # Compute indicators on the PAST slice
             df_past = compute_all_indicators(df_past)
@@ -96,13 +98,15 @@ def run_time_machine(days_ago=30, limit=20):
             # AI Probability (P0 Fix: Improved checking)
             ai_result = predict_prob(df_past)
             if ai_result is None:
-                # print(f"⚠️ AI Prediction failed for {ticker}")
                 ai_prob = 0.0
             elif isinstance(ai_result, dict):
                 ai_prob = ai_result.get('prob', 0.0)
-                # print(f"DEBUG: {ticker} AI Prob: {ai_prob:.2f}")
             else:
                 ai_prob = float(ai_result) if ai_result else 0.0
+            
+            # --- STRATEGY FILTER: AI PROB > 0.40 ---
+            if ai_prob < 0.40:
+                return None
             
             roi = (current_price - entry_price) / entry_price if entry_price > 0 else 0.0
             
@@ -121,7 +125,6 @@ def run_time_machine(days_ago=30, limit=20):
             return None
 
     results = []
-    results = []
     # Use fewer workers since we are mostly reading DB now
     with ThreadPoolExecutor(max_workers=5) as executor:
         futures = [executor.submit(process_stock, s) for s in candidates]
@@ -131,20 +134,21 @@ def run_time_machine(days_ago=30, limit=20):
                 results.append(res)
 
     # 4. RANKING
-    # We want to see: "If I bought the Top 10 AI picks, what happened?"
-    # Sort by AI Probability (desc)
+    # We want to see: "If I bought the Top 10 High Confidence AI picks, what happened?"
     df_res = pd.DataFrame(results)
     
     if df_res.empty:
-        return {"error": "No data found for backtest"}
+        return {"error": "No stocks met the strategy criteria (AI > 40%, Price > $15)"}
         
     df_res = df_res.sort_values(by="ai_prob_at_entry", ascending=False)
     
-    top_picks = df_res.head(20).to_dict('records')
+    # NEW: Top 10 only as requested for "Concentrated Strategy"
+    top_picks = df_res.head(10).to_dict('records')
     
-    # Summary Stats for Top Picks (Top 20)
-    avg_return = df_res.head(20)['actual_return'].mean()
-    win_count = len(df_res.head(20)[df_res.head(20)['actual_return'] > 0])
+    # Summary Stats for Top Picks
+    top_df = df_res.head(10)
+    avg_return = top_df['actual_return'].mean()
+    win_count = len(top_df[top_df['actual_return'] > 0])
     win_rate = win_count / len(top_picks) if len(top_picks) > 0 else 0
     
     return {
@@ -152,7 +156,7 @@ def run_time_machine(days_ago=30, limit=20):
         "simulated_date": results[0]['entry_date'] if results else "N/A",
         "candidate_pool_size": len(results),
         "ai_prob_max": float(df_res['ai_prob_at_entry'].max() * 100),
-        "ai_prob_min": float(df_res.head(20)['ai_prob_at_entry'].min() * 100),
+        "ai_prob_min": float(top_df['ai_prob_at_entry'].min() * 100),
         "top_picks": top_picks,
         "summary": {
             "avg_return": avg_return,

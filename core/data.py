@@ -1,5 +1,6 @@
 import yfinance as yf
 import pandas as pd
+import numpy as np
 import sqlite3
 import os
 import twstock
@@ -9,12 +10,17 @@ from datetime import datetime, timedelta
 DB_PATH = os.path.join(os.path.dirname(__file__), "../storage.db")
 
 def get_db_connection():
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=30.0) # Increase timeout for concurrency
+    conn.row_factory = sqlite3.Row # Return dict-like rows
     return conn
 
 def init_db():
     conn = get_db_connection()
     cursor = conn.cursor()
+    
+    # Enable Write-Ahead Logging for concurrency
+    cursor.execute("PRAGMA journal_mode=WAL;")
+    
     # Ensure table exists
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS stock_history (
@@ -39,6 +45,7 @@ def init_db():
             last_price REAL,
             change_percent REAL,
             ai_probability REAL,
+            model_version TEXT,
             updated_at TIMESTAMP
         )
     ''')
@@ -57,21 +64,33 @@ def init_db():
             k_val REAL,
             d_val REAL,
             atr REAL,
+            model_version TEXT,
             updated_at TIMESTAMP
         )
     ''')
     
-    # Migration: Check if ai_probability exists, if not add it
+    # Migration: Check if columns exist
     try:
         cursor.execute("SELECT ai_probability FROM stock_scores LIMIT 1")
     except sqlite3.OperationalError:
-        print("Migrating DB: Adding ai_probability column...")
         cursor.execute("ALTER TABLE stock_scores ADD COLUMN ai_probability REAL")
+        
+    try:
+        cursor.execute("SELECT model_version FROM stock_scores LIMIT 1")
+    except sqlite3.OperationalError:
+        print("Migrating DB: Adding model_version to stock_scores...")
+        cursor.execute("ALTER TABLE stock_scores ADD COLUMN model_version TEXT")
+
+    try:
+        cursor.execute("SELECT model_version FROM stock_indicators LIMIT 1")
+    except sqlite3.OperationalError:
+        print("Migrating DB: Adding model_version to stock_indicators...")
+        cursor.execute("ALTER TABLE stock_indicators ADD COLUMN model_version TEXT")
         
     conn.commit()
     conn.close()
 
-def save_indicators_to_db(ticker, df):
+def save_indicators_to_db(ticker, df, **kwargs):
     """Saves the last row of indicators to DB for fast scanning."""
     if df.empty: return
     last = df.iloc[-1]
@@ -80,15 +99,16 @@ def save_indicators_to_db(ticker, df):
     try:
         cursor.execute('''
             INSERT OR REPLACE INTO stock_indicators (
-                ticker, rsi, macd, macd_signal, ema_20, ema_50, sma_20, sma_60, k_val, d_val, atr, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ticker, rsi, macd, macd_signal, ema_20, ema_50, sma_20, sma_60, k_val, d_val, atr, model_version, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             ticker, 
             last.get('rsi'), last.get('macd'), last.get('macd_signal'),
             last.get('ema_20'), last.get('ema_50'),
             last.get('sma_20'), last.get('sma_60'),
-            last.get('k'), last.get('d'), # KD columns are 'k' and 'd'
+            last.get('k'), last.get('d'),
             last.get('atr'),
+            kwargs.get('model_version'),
             datetime.now()
         ))
         conn.commit()
@@ -103,7 +123,13 @@ def load_indicators_from_db(ticker):
     query = 'SELECT * FROM stock_indicators WHERE ticker = ?'
     try:
         df = pd.read_sql(query, conn, params=(ticker,))
-        return df.to_dict('records')[0] if not df.empty else None
+        if not df.empty:
+            record = df.to_dict('records')[0]
+            # Sanitize for JSON
+            for k, v in record.items():
+                if pd.isna(v): record[k] = None
+            return record
+        return None
     except Exception:
         return None
     finally:
@@ -200,21 +226,22 @@ def fetch_stock_data(ticker: str, days: int = 365, force_download: bool = False)
         print(f"Fetch Error {ticker}: {e}")
         return pd.DataFrame()
 
-def save_score_to_db(ticker, score_data, ai_prob=None):
+def save_score_to_db(ticker, score_data, ai_prob=None, model_version=None):
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute('''
-        INSERT OR REPLACE INTO stock_scores (ticker, total_score, trend_score, momentum_score, volatility_score, last_price, change_percent, ai_probability, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT OR REPLACE INTO stock_scores (ticker, total_score, trend_score, momentum_score, volatility_score, last_price, change_percent, ai_probability, model_version, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ''', (
         ticker, 
         score_data['total_score'],
         score_data['trend_score'],
         score_data['momentum_score'],
         score_data['volatility_score'],
-        score_data['last_price'],
-        score_data['change_percent'],
+        score_data.get('last_price', 0),
+        score_data.get('change_percent', 0),
         ai_prob,
+        model_version,
         datetime.now()
     ))
     conn.commit()
@@ -228,11 +255,18 @@ def get_top_scores_from_db(limit=50, sort_by='score'):
         order_clause = "ai_probability DESC"
         
     df = pd.read_sql(f'''
-        SELECT * FROM stock_scores 
+        SELECT *, updated_at as last_sync FROM stock_scores 
         ORDER BY {order_clause}
         LIMIT ?
     ''', conn, params=(limit,))
     conn.close()
-    return df.to_dict('records')
+    
+    # Robust NaN/NaT handling for JSON
+    records = df.to_dict('records')
+    for r in records:
+        for k, v in r.items():
+            if pd.isna(v):
+                r[k] = None
+    return records
 
 init_db()

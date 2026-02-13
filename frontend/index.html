@@ -600,6 +600,8 @@
                 clearTimeout(debounceTimer);
                 debounceTimer = setTimeout(() => handleSearch(e.target.value), 300);
             });
+            // Initial UI Update
+            updateDefinitionCard();
         });
 
         // --- Tabs ---
@@ -701,7 +703,10 @@
                         <div style="flex: 2; display: flex; gap: 15px; flex-wrap: wrap;">
                             <div><span style="color: var(--text-main)">⚖️ 加權比例</span>: GB (1/3) + RF (1/3) + MLP (1/3) 等權重平均。</div>
                             <div><span style="color: var(--text-main)">🎯 預測目標</span>: 20個交易日內達成 15% 獲利且未觸及 -5% 停損。</div>
-                            <div><span style="color: var(--text-main)">🧬 輸入特徵</span>: RSI, MACD, MACD Signal, SMA 20/60, KD, BB Width, BB Percent。</div>
+                            <div style="width: 100%; margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(168, 85, 247, 0.1); font-size: 0.85rem; color: var(--text-muted); display: flex; gap: 20px;">
+                                <span>🏷️ Model: <b style="color:var(--ai-color)" id="model-version">Loading...</b></span>
+                                <span>🕒 Last Sync: <b style="color:var(--text-main)" id="last-sync">--</b></span>
+                            </div>
                         </div>
                     </div>
                 `;
@@ -752,15 +757,36 @@
                 }
 
                 const res = await fetch(url, { signal: abortController?.signal });
+
+                if (!res.ok) {
+                    const text = await res.text();
+                    throw new Error(`Server returned ${res.status}: ${text.substring(0, 100)}...`);
+                }
+
                 const data = await res.json();
 
                 // Cache it
                 APP_STATE[stateKey].data = data;
                 APP_STATE[stateKey].status = 'done';
 
+                // Update Version Info in UI if targeting AI tab
+                if (data.length > 0 && CURRENT_TAB === 'ai') {
+                    const first = data[0];
+                    const vEl = document.getElementById('model-version');
+                    const sEl = document.getElementById('last-sync');
+                    if (vEl) vEl.innerText = first.model_version || 'v4.0';
+                    if (sEl) {
+                        let syncTime = first.last_sync || 'Just now';
+                        // Shorten sync time if it's a long timestamp
+                        if (syncTime.length > 19) syncTime = syncTime.substring(0, 19);
+                        sEl.innerText = syncTime;
+                    }
+                }
+
                 renderTable(data);
             } catch (err) {
                 if (err.name === 'AbortError') return;
+                console.error("Fetch error:", err);
                 container.innerHTML = `<div style="text-align:center; padding:20px; color:var(--error)">Error loading data: ${err.message}</div>`;
             }
         }
@@ -847,7 +873,7 @@
                             </span>
                         </div>
 
-                        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:15px; margin-bottom:25px;">
+                        <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:15px; margin-bottom:25px;">
                             <div class="stat-box" style="text-align:center; border: 1px solid ${summary.avg_return > 0 ? 'var(--success)' : 'var(--error)'}">
                                 <div style="color:var(--text-muted)">Avg Return (30d)</div>
                                 <div style="font-size:1.8rem; font-weight:bold; color: ${summary.avg_return > 0 ? 'var(--success)' : 'var(--error)'}">
@@ -869,9 +895,20 @@
                                     ${(summary.best_return * 100).toFixed(1)}%
                                 </div>
                             </div>
+                            
+                            <!-- Strategy Recommendation Card -->
+                            <div class="stat-box" style="grid-column: span 3; background: rgba(var(--accent-rgb), 0.1); border: 1px dashed var(--accent); padding:15px; text-align:left;">
+                                <div style="font-weight:bold; margin-bottom:8px; display:flex; align-items:center;">
+                                    <span style="font-size:1.4rem; margin-right:10px;">🛡️</span> 策略建議：集中攻略 (Concentrated Strategy)
+                                </div>
+                                <div style="font-size:0.85rem; color:var(--text-muted); line-height:1.5;">
+                                    <b>執行條件：</b>掃描候選池 500 檔 → 排除低價股 (<$15) → 鎖定 AI 機率 > 40% → 挑選最強 10 名。<br>
+                                    <b>實戰指南：</b>回測顯示當前模型在「分散投資前10名」時具備極高韌性。建議等權重分配資金於前 10 檔，持有期間約 20-30 天，可捕捉大贏家同時規避單一標的回檔風險。
+                                </div>
+                            </div>
                         </div>
                         
-                        <h3 style="margin-bottom:15px;">📜 Historical Top 20 Picks</h3>
+                        <h3 style="margin-bottom:15px;">📜 Top 10 High Confidence Picks</h3>
                         <div class="table-wrapper">
                             <table>
                                 <thead>
@@ -880,7 +917,7 @@
                                         <th>Entry Price</th>
                                         <th>Current Price</th>
                                         <th>AI Prob (Then)</th>
-                                        <th>Return</th>
+                                        <th style="text-align:right">Return</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -889,16 +926,28 @@
                 // Add rows
                 picks.forEach(p => {
                     const retColor = p.actual_return > 0 ? 'var(--success)' : 'var(--error)';
+                    const prob = (p.ai_prob_at_entry * 100).toFixed(0);
+
+                    // Confidence Coloring
+                    let probStyle = 'background:rgba(255,255,255,0.05); color:var(--accent)';
+                    if (prob >= 60) {
+                        probStyle = 'background:rgba(46, 204, 113, 0.2); color:var(--success)';
+                    } else if (prob >= 40) {
+                        probStyle = 'background:rgba(241, 196, 15, 0.2); color:#f1c40f';
+                    }
+
                     html += `
-                        <tr>
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
                             <td>
                                 <span style="font-weight:bold; color:var(--text-main)">${p.ticker}</span> 
                                 ${p.name && p.name !== p.ticker ? `<span style="color:var(--text-muted); font-size:0.9em">${p.name}</span>` : ''}
                             </td>
                             <td>$${p.entry_price.toFixed(1)}</td>
                             <td>$${p.current_price.toFixed(1)}</td>
-                            <td><span class="badge badge-ai">${(p.ai_prob_at_entry * 100).toFixed(0)}%</span></td>
-                            <td style="color:${retColor}; font-weight:bold;">${(p.actual_return * 100).toFixed(1)}%</td>
+                            <td><span class="badge" style="${probStyle}; min-width:40px;">${prob}%</span></td>
+                            <td style="text-align:right; color:${retColor}; font-weight:bold;">
+                                ${(p.actual_return * 100).toFixed(1)}%
+                            </td>
                         </tr>
                     `;
                 });

@@ -23,11 +23,11 @@ Utilizes Moving Average ribbons (SMA20, SMA60). Full points are awarded when the
 * **Bollinger Squeeze**: Detects periods of abnormally low volatility, often preceding explosive moves.
 * **Volume Breakout**: Filters for price moves supported by heavy institutional-grade volume (>1.5x MA20).
 
-## 2. The AI Sniper Model (Machine Learning V3 - Ensemble)
+## 2. The AI Sniper Model (Machine Learning V4 - Ensemble)
 
-The V3 engine moves beyond a single classifier to an **Ensemble Voting** architecture, increasing stability and reducing prediction variance.
+The V4 engine moves beyond a single classifier to an **Ensemble Voting** architecture, increasing stability and reducing prediction variance.
 
-Unlike "black box" models, our Sniper Model is trained with a specific exit strategy: **3:1 Risk/Reward**.
+Unlike "black box" models, our Sniper Model is trained with a specific exit strategy: **3:1 Risk/Reward**. It also incorporates the heuristic **Rise Score** (Trend, Momentum, Volatility) as direct features to guide the ensemble with technical expertise.
 
 ### Target Labeling
 
@@ -37,10 +37,11 @@ We label a "Win" ONLY if:
 2. Condition 1 is met **BEFORE** the price reaches a **-5%** stop loss.
 3. The outcome occurs within **20 trading days**.
 
-* **Ensemble Learning (V3)**: 結合三種異質模型，採 **等權重投票法 (Equal Weighting 1/3 each)**：
+* **Ensemble Learning (V4)**: 結合三種異質模型，採 **等權重投票法 (Equal Weighting 1/3 each)**：
   * **GradientBoosting**: 專注於殘差學習，捕捉複雜的非線性趨勢。
   * **RandomForest**: 採用 200 棵決策樹，增加模型魯棒性。
   * **MLP (Multi-Layer Perceptron)**: (128, 64) 雙層神經網路，挖掘深層特徵關聯。
+* **Expert Feature Engineering**: 加入並向量化「Rise Score」 heuristic 分數作為核心輸入。
 * **Feature Normalization**: MACD 與 MACD Hist 皆經過價格標準化 (`Indicator / Price`)。
 * **Class Weighting**: 針對獲利樣本稀缺 (15.58%) 的特性優化。
 

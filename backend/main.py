@@ -22,7 +22,7 @@ from core.analysis import (
     calculate_smas, calculate_kd, calculate_bollinger, calculate_atr,
     generate_analysis_report
 )
-from core.ai import predict_prob
+from core.ai import predict_prob, get_model_version
 from core.alerts import check_smart_conditions
 from backend.backtest import run_time_machine
 
@@ -102,22 +102,30 @@ def run_sync_task():
             sync_status["current_ticker"] = f"{ticker} {name}"
             
         try:
-            # Smart Skip: Check if indicators were updated in the last 6 hours
+            # Smart Sync: Check version AND timestamp
             cached = load_indicators_from_db(ticker)
+            current_model_version = get_model_version()
+            
+            should_skip = False
             if cached:
-                # SQLite TIMESTAMP might come back as string
-                if isinstance(cached['updated_at'], str):
-                    try:
-                        updated_at = datetime.strptime(cached['updated_at'], '%Y-%m-%d %H:%M:%S.%f')
-                    except ValueError:
-                        updated_at = datetime.strptime(cached['updated_at'], '%Y-%m-%d %H:%M:%S')
-                else:
-                    updated_at = cached['updated_at']
+                # 1. Check Model Version (MUST match)
+                if cached.get('model_version') == current_model_version:
+                    # 2. Check Timestamp (SQLite might return string)
+                    if isinstance(cached['updated_at'], str):
+                        try:
+                            updated_at = datetime.strptime(cached['updated_at'], '%Y-%m-%d %H:%M:%S.%f')
+                        except ValueError:
+                            updated_at = datetime.strptime(cached['updated_at'], '%Y-%m-%d %H:%M:%S')
+                    else:
+                        updated_at = cached['updated_at']
 
-                if datetime.now() - updated_at < timedelta(hours=6):
-                    with sync_lock:
-                        sync_status["current"] += 1
-                    return
+                    if datetime.now() - updated_at < timedelta(hours=6):
+                        should_skip = True
+
+            if should_skip:
+                with sync_lock:
+                    sync_status["current"] += 1
+                return
             
             df = fetch_stock_data(ticker, days=200, force_download=True)
             if not df.empty and len(df) >= 60:
@@ -132,8 +140,8 @@ def run_sync_task():
                 else:
                     ai_prob = ai_result
                     
-                save_score_to_db(ticker, score, ai_prob)
-                save_indicators_to_db(ticker, df)
+                save_score_to_db(ticker, score, ai_prob, model_version=current_model_version)
+                save_indicators_to_db(ticker, df, model_version=current_model_version)
         except Exception as e:
             print(f"Sync error for {ticker}: {e}")
             
@@ -189,6 +197,8 @@ def get_top_picks(sort: str = "score"):
                 "ticker": p['ticker'],
                 "name": name_map.get(p['ticker'], p['ticker']),
                 "ai_probability": ai_prob,
+                "model_version": p.get('model_version', 'legacy'),
+                "last_sync": p.get('last_sync'),
                 "ai_target_price": round(last_price * 1.15, 2) if last_price else 0,
                 "ai_stop_price": round(last_price * 0.95, 2) if last_price else 0,
                 "score": {
