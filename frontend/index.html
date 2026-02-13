@@ -493,374 +493,346 @@
 
         <!-- NEW: Sniper Manual (Practical Tips) -->
         <div class="card" style="margin-bottom: 25px; border-left: 4px solid var(--success);">
-            <header style="margin-bottom: 12px;">
-                <h3 style="display: flex; align-items: center; gap: 8px; font-size: 1rem; color: var(--text-main);">
-                    <span>🎯</span> 狙擊手實戰觀察手冊 (Sniper Manual)
-                </h3>
-            </header>
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px;">
-                <div style="background: rgba(255,255,255,0.03); padding: 12px; border-radius: 8px;">
-                    <div style="color: var(--success); font-weight: bold; margin-bottom: 6px; font-size: 0.9rem;">1. AI
-                        共識檢核 (Consensus)</div>
-                    <p style="font-size: 0.8rem; color: var(--text-muted); margin: 0;">
-                        當三個亞模型 (GB, RF, MLP) 分數**同時高於 60%** 時，代表訊號極度強烈。若 MLP 分數極低但其餘兩者極高，通常暗示模型對目前波動型態持保留態度。
-                    </p>
+            <!-- MAIN TABLE -->
+            <section class="card">
+                <div id="table-container">
+                    <div class="loading">Loading...</div>
                 </div>
-                <div style="background: rgba(255,255,255,0.03); padding: 12px; border-radius: 8px;">
-                    <div style="color: var(--accent); font-weight: bold; margin-bottom: 6px; font-size: 0.9rem;">2. 技術面與
-                        AI 關聯性 (Correlation)</div>
-                    <p style="font-size: 0.8rem; color: var(--text-muted); margin: 0;">
-                        **AI 高分 + High Rise Score**：標標標準的強勢突破股。<br>
-                        **AI 高分 + Low Rise Score**：可能是潛在的底部反轉或 AI 偵測到技術面尚未反映的隱藏動能。
-                    </p>
+            </section>
+        </div>
+
+        <!-- DETAILS MODAL -->
+        <div class="modal" id="detailsModal">
+            <div class="modal-content">
+                <span class="close-modal" onclick="closeModal()">&times;</span>
+
+                <div class="modal-header">
+                    <div>
+                        <h2 id="modalTicker" style="margin:0">Ticker</h2>
+                        <div id="modalPrice" style="font-size:1.5rem; font-weight:bold; margin-top:5px;">$0.00</div>
+                    </div>
+                    <div class="badge" id="modalScoreBadge" style="font-size:1.5rem; padding:10px 20px;">0</div>
                 </div>
-                <div style="background: rgba(255,255,255,0.03); padding: 12px; border-radius: 8px;">
-                    <div style="color: var(--error); font-weight: bold; margin-bottom: 6px; font-size: 0.9rem;">3.
-                        大盤系統風險 (System Risk)</div>
-                    <p style="font-size: 0.8rem; color: var(--text-muted); margin: 0;">
-                        模型專注於個股波動。若加權指數 (TAIEX) 處於空頭或異常波動期間，所有 AI 勝率應自動下修 10-20%，以防範大盤崩跌帶來的系統性風險。
-                    </p>
+
+                <div class="chart-container" id="modalChart"></div>
+
+                <div class="ai-box">
+                    <h4 style="margin:0 0 10px 0; color:var(--ai-color)">🎯 AI Sniper Prediction (20-Day, 3:1 R/R)</h4>
+                    <div id="modalAI" style="font-size:2rem; font-weight:800; margin-bottom:5px;">0%</div>
+                    <div id="modalAIConf" style="font-size:0.9rem; margin-bottom:10px;">Waiting...</div>
+
+                    <!-- NEW: AI Consensus Details -->
+                    <div id="modal-ai-breakdown"
+                        style="display: flex; gap: 8px; justify-content: center; margin: 15px 0; flex-wrap: wrap;">
+                    </div>
+
+                    <div id="modalAITargets" style="display:flex; justify-content:center; gap:30px; margin:10px 0">
+                        <div><span style="color:var(--success)">🎯 Target:</span> <span id="modalTarget">$0</span></div>
+                        <div><span style="color:var(--danger)">🛡️ Stop:</span> <span id="modalStop">$0</span></div>
+                    </div>
+                    <small style="color:var(--text-muted)">Win = Hit +15% before -5% within 20 days (3:1 R/R)</small>
+                </div>
+
+                <div class="stat-box" style="text-align: left; margin-bottom: 20px;">
+                    <h4 style="margin:0 0 10px 0; color:white;">🤖 AI Analyst Report</h4>
+                    <div id="modal-analysis" style="font-size: 0.9rem; line-height: 1.6; color: var(--text-muted);">
+                        Loading report...
+                    </div>
+                </div>
+
+                <div class="stats-grid" id="modalStats">
+                    <!-- Populated by JS -->
                 </div>
             </div>
         </div>
 
-        <!-- MAIN TABLE -->
-        <section class="card">
-            <div id="table-container">
-                <div class="loading">Loading...</div>
-            </div>
-        </section>
-    </div>
+        <script>
+            let CURRENT_TAB = 'technical'; // 'technical' or 'ai'
+            let abortController = null; // Global controller for cancelling requests
 
-    <!-- DETAILS MODAL -->
-    <div class="modal" id="detailsModal">
-        <div class="modal-content">
-            <span class="close-modal" onclick="closeModal()">&times;</span>
+            // Global State for Caching & Persistence
+            const APP_STATE = {
+                backtest: { status: 'idle', data: null, html: null },
+                smartScan: { status: 'idle', data: null },
+                ai: { status: 'idle', data: null },
+                technical: { status: 'idle', data: null }
+            };
 
-            <div class="modal-header">
-                <div>
-                    <h2 id="modalTicker" style="margin:0">Ticker</h2>
-                    <div id="modalPrice" style="font-size:1.5rem; font-weight:bold; margin-top:5px;">$0.00</div>
-                </div>
-                <div class="badge" id="modalScoreBadge" style="font-size:1.5rem; padding:10px 20px;">0</div>
-            </div>
+            // --- Init ---
+            document.addEventListener('DOMContentLoaded', () => {
+                updateDefinitionCard();
+                renderTabFromState_or_Fetch(); // Use new render logic
+                pollSyncStatus();
 
-            <div class="chart-container" id="modalChart"></div>
-
-            <div class="ai-box">
-                <h4 style="margin:0 0 10px 0; color:var(--ai-color)">🎯 AI Sniper Prediction (20-Day, 3:1 R/R)</h4>
-                <div id="modalAI" style="font-size:2rem; font-weight:800; margin-bottom:5px;">0%</div>
-                <div id="modalAIConf" style="font-size:0.9rem; margin-bottom:10px;">Waiting...</div>
-
-                <!-- NEW: AI Consensus Details -->
-                <div id="modal-ai-breakdown"
-                    style="display: flex; gap: 8px; justify-content: center; margin: 15px 0; flex-wrap: wrap;"></div>
-
-                <div id="modalAITargets" style="display:flex; justify-content:center; gap:30px; margin:10px 0">
-                    <div><span style="color:var(--success)">🎯 Target:</span> <span id="modalTarget">$0</span></div>
-                    <div><span style="color:var(--danger)">🛡️ Stop:</span> <span id="modalStop">$0</span></div>
-                </div>
-                <small style="color:var(--text-muted)">Win = Hit +15% before -5% within 20 days (3:1 R/R)</small>
-            </div>
-
-            <div class="stat-box" style="text-align: left; margin-bottom: 20px;">
-                <h4 style="margin:0 0 10px 0; color:white;">🤖 AI Analyst Report</h4>
-                <div id="modal-analysis" style="font-size: 0.9rem; line-height: 1.6; color: var(--text-muted);">
-                    Loading report...
-                </div>
-            </div>
-
-            <div class="stats-grid" id="modalStats">
-                <!-- Populated by JS -->
-            </div>
-        </div>
-    </div>
-
-    <script>
-        let CURRENT_TAB = 'technical'; // 'technical' or 'ai'
-        let abortController = null; // Global controller for cancelling requests
-
-        // Global State for Caching & Persistence
-        const APP_STATE = {
-            backtest: { status: 'idle', data: null, html: null },
-            smartScan: { status: 'idle', data: null },
-            ai: { status: 'idle', data: null },
-            technical: { status: 'idle', data: null }
-        };
-
-        // --- Init ---
-        document.addEventListener('DOMContentLoaded', () => {
-            updateDefinitionCard();
-            renderTabFromState_or_Fetch(); // Use new render logic
-            pollSyncStatus();
-
-            // Search Debounce
-            let debounceTimer;
-            document.getElementById('searchInput').addEventListener('input', (e) => {
-                clearTimeout(debounceTimer);
-                debounceTimer = setTimeout(() => handleSearch(e.target.value), 300);
+                // Search Debounce
+                let debounceTimer;
+                document.getElementById('searchInput').addEventListener('input', (e) => {
+                    clearTimeout(debounceTimer);
+                    debounceTimer = setTimeout(() => handleSearch(e.target.value), 300);
+                });
+                // Initial UI Update
+                updateDefinitionCard();
             });
-            // Initial UI Update
-            updateDefinitionCard();
-        });
 
-        // --- Tabs ---
-        function switchTab(tab) {
-            if (CURRENT_TAB === tab) return;
+            // --- Tabs ---
+            function switchTab(tab) {
+                if (CURRENT_TAB === tab) return;
 
-            // Cancel any pending request if meaningful
-            if (abortController) {
-                // We abort previous requests to "clear the pipe"
-                // But for persisted tabs (backtest), maybe we shouldn't?
-                // For now, let's keep it simple: abort strictly ensures
-                // we don't handle stale responses.
-                console.log("Cancelling previous request due to tab switch");
-                abortController.abort();
-            }
-            abortController = new AbortController();
-
-            CURRENT_TAB = tab;
-            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-            document.querySelector(`.tab-btn[data-target="${tab}"]`).classList.add('active');
-            updateDefinitionCard();
-
-            // Render from State or Fetch
-            renderTabFromState_or_Fetch();
-        }
-
-        async function renderTabFromState_or_Fetch() {
-            const container = document.getElementById('table-container');
-
-            // 1. Handle Backtest specifically (Custom UI)
-            if (CURRENT_TAB === 'backtest') {
-                if (APP_STATE.backtest.status === 'done' && APP_STATE.backtest.html) {
-                    container.innerHTML = APP_STATE.backtest.html;
-                } else if (APP_STATE.backtest.status === 'loading') {
-                    container.innerHTML = `<div class="loading">⏳ Traveling back 30 days... (This may take a moment)</div>`;
-                } else {
-                    renderDefaultBacktestUI(container);
+                // Cancel any pending request if meaningful
+                if (abortController) {
+                    // We abort previous requests to "clear the pipe"
+                    // But for persisted tabs (backtest), maybe we shouldn't?
+                    // For now, let's keep it simple: abort strictly ensures
+                    // we don't handle stale responses.
+                    console.log("Cancelling previous request due to tab switch");
+                    abortController.abort();
                 }
-                return;
+                abortController = new AbortController();
+
+                CURRENT_TAB = tab;
+                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                document.querySelector(`.tab-btn[data-target="${tab}"]`).classList.add('active');
+                updateDefinitionCard();
+
+                // Render from State or Fetch
+                renderTabFromState_or_Fetch();
             }
 
-            // 2. Handle Smart Scan
-            if (CURRENT_TAB === 'smart-scan') {
-                if (APP_STATE.smartScan.data) {
-                    renderTable(APP_STATE.smartScan.data);
-                } else {
-                    fetchSmartScan();
+            async function renderTabFromState_or_Fetch() {
+                const container = document.getElementById('table-container');
+
+                // 1. Handle Backtest specifically (Custom UI)
+                if (CURRENT_TAB === 'backtest') {
+                    if (APP_STATE.backtest.status === 'done' && APP_STATE.backtest.html) {
+                        container.innerHTML = APP_STATE.backtest.html;
+                    } else if (APP_STATE.backtest.status === 'loading') {
+                        container.innerHTML = `<div class="loading">⏳ Traveling back 30 days... (This may take a moment)</div>`;
+                    } else {
+                        renderDefaultBacktestUI(container);
+                    }
+                    return;
                 }
-                return;
+
+                // 2. Handle Smart Scan
+                if (CURRENT_TAB === 'smart-scan') {
+                    if (APP_STATE.smartScan.data) {
+                        renderTable(APP_STATE.smartScan.data);
+                    } else {
+                        fetchSmartScan();
+                    }
+                    return;
+                }
+
+                // 3. Handle Standard Tabs (AI, Technical)
+                let stateKey = CURRENT_TAB === 'ai' ? 'ai' : 'technical';
+
+                if (APP_STATE[stateKey].data) {
+                    renderTable(APP_STATE[stateKey].data);
+                } else {
+                    fetchData();
+                }
             }
 
-            // 3. Handle Standard Tabs (AI, Technical)
-            let stateKey = CURRENT_TAB === 'ai' ? 'ai' : 'technical';
-
-            if (APP_STATE[stateKey].data) {
-                renderTable(APP_STATE[stateKey].data);
-            } else {
-                fetchData();
-            }
-        }
-
-        function renderDefaultBacktestUI(container) {
-            container.innerHTML = `
+            function renderDefaultBacktestUI(container) {
+                container.innerHTML = `
                 <div style="text-align:center; padding:40px;">
                     <h3 style="color:var(--text-main)">🧪 Time Machine Backtest</h3>
                     <p style="color:var(--text-muted)">Verify AI performance by simulating a buy 30 days ago.</p>
                     <button class="btn btn-primary" onclick="runBacktest()" style="padding:15px 30px; font-size:1.2rem; margin-top:20px;">🚀 Start 30-Day Simulation</button>
                 </div>
              `;
-        }
+            }
 
-        function updateDefinitionCard() {
-            const card = document.getElementById('definition-card');
-            if (CURRENT_TAB === 'technical') {
-                card.style.borderColor = 'rgba(56, 189, 248, 0.2)';
-                card.style.background = 'rgba(56, 189, 248, 0.05)';
-                card.innerHTML = `
-                    <div style="display: flex; gap: 20px; flex-wrap: wrap;">
-                        <div style="flex: 1; min-width: 200px;">
-                            <strong style="color: var(--accent); display: block; margin-bottom: 5px;">📊 Rise Score 算法定義 (Weight: 100%)</strong>
-                            本分數由三個維度組成，旨在篩選具備強大動能且即刻爆發潛力的個股。
-                        </div>
-                        <div style="flex: 2; display: flex; gap: 15px; flex-wrap: wrap;">
-                            <div><span style="color: var(--text-main)">📈 趨勢 (40%)</span>: 股價相對於 SMA20/60 的多頭排列強度。</div>
-                            <div><span style="color: var(--text-main)">🚀 動能 (30%)</span>: RSI (Wilder's) 強弱值與 KD 低檔金叉訊號。</div>
-                            <div><span style="color: var(--text-main)">🌀 型態 (30%)</span>: 布林通道壓縮 (Squeeze) 與 1.5x 爆量突破。</div>
+            function updateDefinitionCard() {
+                const card = document.getElementById('definition-card');
+                if (CURRENT_TAB === 'technical') {
+                    card.style.borderColor = 'rgba(16, 185, 129, 0.2)';
+                    card.style.background = 'rgba(16, 185, 129, 0.05)';
+                    card.innerHTML = `
+                    <div style="display: flex; gap: 20px; align-items: center;">
+                        <div style="flex: 1;">
+                            <strong style="color: var(--success); display: block; margin-bottom: 5px;">🔥 Rise Score (Heuristic Score)</strong>
+                            基於 Trend(40%) + Momentum(30%) + Volatility(30%) 權重計算的技術面總分。
                         </div>
                     </div>
                 `;
-            } else if (CURRENT_TAB === 'ai') {
-                card.style.borderColor = 'rgba(168, 85, 247, 0.2)';
-                card.style.background = 'rgba(168, 85, 247, 0.05)';
-                card.innerHTML = `
-                    <div style="display: flex; gap: 20px; flex-wrap: wrap;">
-                        <div style="flex: 1; min-width: 200px;">
-                            <strong style="color: var(--ai-color); display: block; margin-bottom: 5px;">🤖 Ensemble AI 預測邏輯 (Sniper Strategy)</strong>
-                            通過三個異質 ML 模型投票產生的共識勝率預測。
+                } else if (CURRENT_TAB === 'ai' || CURRENT_TAB === 'smart-scan') {
+                    const isAI = CURRENT_TAB === 'ai';
+                    card.style.borderColor = 'rgba(168, 85, 247, 0.2)';
+                    card.style.background = 'rgba(168, 85, 247, 0.05)';
+
+                    let sniperManual = `
+                    <div style="width: 100%; margin-top: 15px; display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; padding-top: 15px; border-top: 1px solid rgba(168, 85, 247, 0.1);">
+                        <div style="font-size: 0.8rem;">
+                            <b style="color: var(--success)">1. AI 共識 (Consensus)</b>: 三模型均 > 60% 時訊號最強。
                         </div>
-                        <div style="flex: 2; display: flex; gap: 15px; flex-wrap: wrap;">
-                            <div><span style="color: var(--text-main)">⚖️ 加權比例</span>: GB (1/3) + RF (1/3) + MLP (1/3) 等權重平均。</div>
-                            <div><span style="color: var(--text-main)">🎯 預測目標</span>: 20個交易日內達成 15% 獲利且未觸及 -5% 停損。</div>
-                            <div style="width: 100%; margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(168, 85, 247, 0.1); font-size: 0.85rem; color: var(--text-muted); display: flex; gap: 20px;">
-                                <span>🏷️ Model: <b style="color:var(--ai-color)" id="model-version">Loading...</b></span>
-                                <span>🕒 Last Sync: <b style="color:var(--text-main)" id="last-sync">--</b></span>
+                        <div style="font-size: 0.8rem;">
+                            <b style="color: var(--accent)">2. 關聯性 (Correlation)</b>: AI 高分 + Rise Score 高分 = 強勢突破。
+                        </div>
+                        <div style="font-size: 0.8rem;">
+                            <b style="color: var(--error)">3. 大盤風險 (System Risk)</b>: 若大盤走空，所有勝率下修 10-20%。
+                        </div>
+                    </div>
+                `;
+
+                    card.innerHTML = `
+                   <div style="display: flex; flex-direction: column; gap: 10px;">
+                        <div style="display: flex; gap: 20px; flex-wrap: wrap; align-items: center;">
+                            <div style="flex: 1; min-width: 250px;">
+                                <strong style="color: var(--ai-color); display: block; margin-bottom: 5px;">
+                                    ${isAI ? '🤖 Ensemble AI 預測邏輯 (Sniper Strategy)' : '🔔 Smart Alerts (複合策略)'}
+                                </strong>
+                                ${isAI ? '透過三個異質 ML 模型投票產生的共識勝率預測。' : '篩選符合特定「AI + 技術面」組合條件的潛力股。'}
                             </div>
+                            ${!isAI ? `
+                            <div style="flex: 2; display: flex; gap: 15px; flex-wrap: wrap; align-items: center;">
+                                <label><input type="checkbox" id="chk-high-ai" checked onchange="fetchSmartScan()"> High AI (>70%)</label>
+                                <label><input type="checkbox" id="chk-vol-surge" onchange="fetchSmartScan()"> Volume Surge (>1.5x)</label>
+                                <label><input type="checkbox" id="chk-kd-gold" onchange="fetchSmartScan()"> KD Golden Cross</label>
+                                <label><input type="checkbox" id="chk-macd-bull" onchange="fetchSmartScan()"> MACD Flip</label>
+                            </div>
+                            ` : `
+                            <div style="flex: 2; display: flex; gap: 15px; font-size: 0.85rem; color: var(--text-muted);">
+                                🏷️ Model: <b style="color:var(--ai-color); margin-right: 15px;" id="model-version">Loading...</b>
+                                🕒 Last Sync: <b style="color:var(--text-main)" id="last-sync">--</b>
+                            </div>
+                            `}
                         </div>
+                        ${sniperManual}
                     </div>
                 `;
-            } else if (CURRENT_TAB === 'smart-scan') {
-                card.style.borderColor = 'rgba(255, 142, 60, 0.2)';
-                card.style.background = 'rgba(255, 142, 60, 0.05)';
-                card.innerHTML = `
-                   <div style="display: flex; gap: 20px; flex-wrap: wrap;">
-                        <div style="flex: 1; min-width: 200px;">
-                            <strong style="color: var(--warning); display: block; margin-bottom: 5px;">🔔 Smart Alerts (複合策略)</strong>
-                            篩選符合特定「AI + 技術面」組合條件的潛力股。
-                        </div>
-                        <div style="flex: 2; display: flex; gap: 15px; flex-wrap: wrap; align-items: center;">
-                            <label><input type="checkbox" id="chk-high-ai" checked onchange="fetchSmartScan()"> High AI (>70%)</label>
-                            <label><input type="checkbox" id="chk-vol-surge" onchange="fetchSmartScan()"> Volume Surge (>1.5x)</label>
-                            <label><input type="checkbox" id="chk-kd-gold" onchange="fetchSmartScan()"> KD Golden Cross</label>
-                            <label><input type="checkbox" id="chk-macd-bull" onchange="fetchSmartScan()"> MACD Flip</label>
-                        </div>
-                    </div>
-                `;
-            } else {
-                card.style.borderColor = 'rgba(34, 197, 94, 0.2)';
-                card.style.background = 'rgba(34, 197, 94, 0.05)';
-                card.innerHTML = `
+                } else {
+                    card.style.borderColor = 'rgba(34, 197, 94, 0.2)';
+                    card.style.background = 'rgba(34, 197, 94, 0.05)';
+                    card.innerHTML = `
                     <div style="display: flex; gap: 20px; align-items: center;">
                          <strong style="color: var(--success); font-size: 1.1rem;">🧪 Time Machine Backtest</strong>
-                         <div>
-                            使用過去的數據來驗證 AI 模型的實戰表現。這可以回答："如果我 30 天前跟著 AI 買，現在賺多少？"
-                         </div>
+                         <div>使用過去的數據來驗證 AI 模型的實戰表現。這可以回答："如果我 30 天前跟著 AI 買，現在賺多少？"</div>
                          <button class="btn btn-primary" onclick="runBacktest()" style="margin-left: auto;">🚀 Run 30-Day Sim</button>
                     </div>
                  `;
+                }
             }
-        }
 
-        // --- Fetch Data ---
-        async function fetchData() {
-            const container = document.getElementById('table-container');
-            container.innerHTML = '<div class="loading">Loading...</div>';
+            // --- Fetch Data ---
+            async function fetchData() {
+                const container = document.getElementById('table-container');
+                container.innerHTML = '<div class="loading">Loading...</div>';
 
-            try {
-                let url = '/api/top_picks?sort=score';
-                let stateKey = 'technical';
+                try {
+                    let url = '/api/top_picks?sort=score';
+                    let stateKey = 'technical';
 
-                if (CURRENT_TAB === 'ai') {
-                    url = '/api/top_picks?sort=ai';
-                    stateKey = 'ai';
-                }
-
-                const res = await fetch(url, { signal: abortController?.signal });
-
-                if (!res.ok) {
-                    const text = await res.text();
-                    throw new Error(`Server returned ${res.status}: ${text.substring(0, 100)}...`);
-                }
-
-                const data = await res.json();
-
-                // Cache it
-                APP_STATE[stateKey].data = data;
-                APP_STATE[stateKey].status = 'done';
-
-                // Update Version Info in UI if targeting AI tab
-                if (data.length > 0 && CURRENT_TAB === 'ai') {
-                    const first = data[0];
-                    const vEl = document.getElementById('model-version');
-                    const sEl = document.getElementById('last-sync');
-                    if (vEl) vEl.innerText = first.model_version || 'v4.0';
-                    if (sEl) {
-                        let syncTime = first.last_sync || 'Just now';
-                        // Shorten sync time if it's a long timestamp
-                        if (syncTime.length > 19) syncTime = syncTime.substring(0, 19);
-                        sEl.innerText = syncTime;
+                    if (CURRENT_TAB === 'ai') {
+                        url = '/api/top_picks?sort=ai';
+                        stateKey = 'ai';
                     }
-                }
 
-                renderTable(data);
-            } catch (err) {
-                if (err.name === 'AbortError') return;
-                console.error("Fetch error:", err);
-                container.innerHTML = `<div style="text-align:center; padding:20px; color:var(--error)">Error loading data: ${err.message}</div>`;
-            }
-        }
+                    const res = await fetch(url, { signal: abortController?.signal });
 
-        async function fetchSmartScan() {
-            const container = document.getElementById('table-container');
+                    if (!res.ok) {
+                        const text = await res.text();
+                        throw new Error(`Server returned ${res.status}: ${text.substring(0, 100)}...`);
+                    }
 
-            // If we have data and we just switched back, we might want to skip fetch?
-            // But this function is also called on checkbox change.
-            // Let's just always fetch on interaction, but save to state.
+                    const data = await res.json();
 
-            const criteria = [];
-            if (document.getElementById('chk-high-ai')?.checked) criteria.push('high_ai');
-            if (document.getElementById('chk-vol-surge')?.checked) criteria.push('vol_surge');
-            if (document.getElementById('chk-kd-gold')?.checked) criteria.push('kd_gold');
-            if (document.getElementById('chk-macd-bull')?.checked) criteria.push('macd_bull');
+                    // Cache it
+                    APP_STATE[stateKey].data = data;
+                    APP_STATE[stateKey].status = 'done';
 
+                    // Update Version Info in UI if targeting AI tab
+                    if (data.length > 0 && CURRENT_TAB === 'ai') {
+                        const first = data[0];
+                        const vEl = document.getElementById('model-version');
+                        const sEl = document.getElementById('last-sync');
+                        if (vEl) vEl.innerText = first.model_version || 'v4.0';
+                        if (sEl) {
+                            let syncTime = first.last_sync || 'Just now';
+                            // Shorten sync time if it's a long timestamp
+                            if (syncTime.length > 19) syncTime = syncTime.substring(0, 19);
+                            sEl.innerText = syncTime;
+                        }
+                    }
 
-            container.innerHTML = '<div class="loading">Scanning Market...</div>';
-
-            try {
-                const res = await fetch('/api/smart_scan', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(criteria),
-                    signal: abortController?.signal
-                });
-                const data = await res.json();
-
-
-                // Save to State
-                APP_STATE.smartScan.data = data;
-                APP_STATE.smartScan.status = 'done';
-
-                // Double check if we are still on the smart-scan tab
-                if (CURRENT_TAB === 'smart-scan') {
                     renderTable(data);
+                } catch (err) {
+                    if (err.name === 'AbortError') return;
+                    console.error("Fetch error:", err);
+                    container.innerHTML = `<div style="text-align:center; padding:20px; color:var(--error)">Error loading data: ${err.message}</div>`;
                 }
-            } catch (err) {
-                if (err.name === 'AbortError') return;
-                container.innerHTML = `<div style="text-align:center; padding:20px; color:var(--error)">Scan Error: ${err.message}</div>`;
             }
-        }
 
-        async function runBacktest() {
-            const container = document.getElementById('table-container');
+            async function fetchSmartScan() {
+                const container = document.getElementById('table-container');
 
-            // Set State to Loading
-            APP_STATE.backtest.status = 'loading';
-            APP_STATE.backtest.html = null;
+                // If we have data and we just switched back, we might want to skip fetch?
+                // But this function is also called on checkbox change.
+                // Let's just always fetch on interaction, but save to state.
 
-            container.innerHTML = '<div class="loading">⏳ Traveling back 30 days... (This may take a moment)</div>';
+                const criteria = [];
+                if (document.getElementById('chk-high-ai')?.checked) criteria.push('high_ai');
+                if (document.getElementById('chk-vol-surge')?.checked) criteria.push('vol_surge');
+                if (document.getElementById('chk-kd-gold')?.checked) criteria.push('kd_gold');
+                if (document.getElementById('chk-macd-bull')?.checked) criteria.push('macd_bull');
 
-            try {
-                // We do NOT use abortController here if we want it to persist? 
-                // Actually, if we use the global abortController, switching tabs cancels it.
-                // To keep it running, we should use a separate controller or none.
-                // Let's use none for backtest to allow background processing.
-                const res = await fetch('/api/backtest?days=30');
-                const data = await res.json();
 
-                // Render Backtest Result
-                if (data.error || data.detail) {
-                    const errorMsg = data.error || data.detail;
-                    const errorHtml = `<div style="text-align:center; padding:20px; color:var(--error)">Backtest Error: ${errorMsg}</div>`;
-                    container.innerHTML = errorHtml;
-                    APP_STATE.backtest.status = 'error';
-                    return;
+                container.innerHTML = '<div class="loading">Scanning Market...</div>';
+
+                try {
+                    const res = await fetch('/api/smart_scan', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(criteria),
+                        signal: abortController?.signal
+                    });
+                    const data = await res.json();
+
+
+                    // Save to State
+                    APP_STATE.smartScan.data = data;
+                    APP_STATE.smartScan.status = 'done';
+
+                    // Double check if we are still on the smart-scan tab
+                    if (CURRENT_TAB === 'smart-scan') {
+                        renderTable(data);
+                    }
+                } catch (err) {
+                    if (err.name === 'AbortError') return;
+                    container.innerHTML = `<div style="text-align:center; padding:20px; color:var(--error)">Scan Error: ${err.message}</div>`;
                 }
+            }
 
-                const summary = data.summary;
-                const picks = data.top_picks || data.top_10_picks; // Backward compatibility
+            async function runBacktest() {
+                const container = document.getElementById('table-container');
 
-                let html = `
+                // Set State to Loading
+                APP_STATE.backtest.status = 'loading';
+                APP_STATE.backtest.html = null;
+
+                container.innerHTML = '<div class="loading">⏳ Traveling back 30 days... (This may take a moment)</div>';
+
+                try {
+                    // We do NOT use abortController here if we want it to persist? 
+                    // Actually, if we use the global abortController, switching tabs cancels it.
+                    // To keep it running, we should use a separate controller or none.
+                    // Let's use none for backtest to allow background processing.
+                    const res = await fetch('/api/backtest?days=30');
+                    const data = await res.json();
+
+                    // Render Backtest Result
+                    if (data.error || data.detail) {
+                        const errorMsg = data.error || data.detail;
+                        const errorHtml = `<div style="text-align:center; padding:20px; color:var(--error)">Backtest Error: ${errorMsg}</div>`;
+                        container.innerHTML = errorHtml;
+                        APP_STATE.backtest.status = 'error';
+                        return;
+                    }
+
+                    const summary = data.summary;
+                    const picks = data.top_picks || data.top_10_picks; // Backward compatibility
+
+                    let html = `
                     <div style="padding:20px; animation: fadeIn 0.5s;">
                         <h2 style="text-align:center; color:var(--text-main); margin-bottom:5px;">🧪 Simulation Result</h2>
                         <p style="text-align:center; color:var(--text-muted); margin-bottom:10px;">Entry Date: ${data.simulated_date} (30 Days Ago)</p>
@@ -923,20 +895,20 @@
                                 <tbody>
                 `;
 
-                // Add rows
-                picks.forEach(p => {
-                    const retColor = p.actual_return > 0 ? 'var(--success)' : 'var(--error)';
-                    const prob = (p.ai_prob_at_entry * 100).toFixed(0);
+                    // Add rows
+                    picks.forEach(p => {
+                        const retColor = p.actual_return > 0 ? 'var(--success)' : 'var(--error)';
+                        const prob = (p.ai_prob_at_entry * 100).toFixed(0);
 
-                    // Confidence Coloring
-                    let probStyle = 'background:rgba(255,255,255,0.05); color:var(--accent)';
-                    if (prob >= 60) {
-                        probStyle = 'background:rgba(46, 204, 113, 0.2); color:var(--success)';
-                    } else if (prob >= 40) {
-                        probStyle = 'background:rgba(241, 196, 15, 0.2); color:#f1c40f';
-                    }
+                        // Confidence Coloring
+                        let probStyle = 'background:rgba(255,255,255,0.05); color:var(--accent)';
+                        if (prob >= 60) {
+                            probStyle = 'background:rgba(46, 204, 113, 0.2); color:var(--success)';
+                        } else if (prob >= 40) {
+                            probStyle = 'background:rgba(241, 196, 15, 0.2); color:#f1c40f';
+                        }
 
-                    html += `
+                        html += `
                         <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
                             <td>
                                 <span style="font-weight:bold; color:var(--text-main)">${p.ticker}</span> 
@@ -950,101 +922,101 @@
                             </td>
                         </tr>
                     `;
-                });
+                    });
 
-                html += `</tbody></table></div></div>
+                    html += `</tbody></table></div></div>
                     <div style="text-align:center; margin-top:30px;">
                         <button class="btn" onclick="APP_STATE.backtest.status='idle'; renderDefaultBacktestUI(document.getElementById('table-container'))">🔄 Run Another Simulation</button>
                     </div>
                 `;
 
-                // Save Result to State
-                APP_STATE.backtest.status = 'done';
-                APP_STATE.backtest.html = html;
+                    // Save Result to State
+                    APP_STATE.backtest.status = 'done';
+                    APP_STATE.backtest.html = html;
 
-                // Only render if we are still on the backtest tab
-                if (CURRENT_TAB === 'backtest') {
-                    container.innerHTML = html;
+                    // Only render if we are still on the backtest tab
+                    if (CURRENT_TAB === 'backtest') {
+                        container.innerHTML = html;
+                    }
+
+                } catch (err) {
+                    // If we didn't use abortController, this is a real network error
+                    if (CURRENT_TAB === 'backtest') {
+                        container.innerHTML = `<div style="text-align:center; padding:20px; color:var(--error)">Backtest Error: ${err.message}</div>`;
+                    }
+                    APP_STATE.backtest.status = 'error';
                 }
-
-            } catch (err) {
-                // If we didn't use abortController, this is a real network error
-                if (CURRENT_TAB === 'backtest') {
-                    container.innerHTML = `<div style="text-align:center; padding:20px; color:var(--error)">Backtest Error: ${err.message}</div>`;
-                }
-                APP_STATE.backtest.status = 'error';
-            }
-        }
-
-        function renderTable(data) {
-            const container = document.getElementById('table-container');
-            if (data.length === 0) {
-                container.innerHTML = '<div class="loading">No stocks found. Try syncing data first.</div>';
-                return;
             }
 
-            // Headers
-            let headers = `
+            function renderTable(data) {
+                const container = document.getElementById('table-container');
+                if (data.length === 0) {
+                    container.innerHTML = '<div class="loading">No stocks found. Try syncing data first.</div>';
+                    return;
+                }
+
+                // Headers
+                let headers = `
                 <th>Ticker</th>
                 <th>Name</th>
                 <th>Price</th>
                 <th>Change</th>
             `;
-            if (CURRENT_TAB === 'ai') {
-                headers += `
+                if (CURRENT_TAB === 'ai') {
+                    headers += `
                     <th><i class="fas fa-bullseye"></i> Target</th>
                     <th><i class="fas fa-hand-paper"></i> Stop</th>
                     <th><i class="fas fa-ruler-combined"></i> Rise Score</th>
                     <th><i class="fas fa-signal"></i> Signal</th>
                     <th><i class="fas fa-brain"></i> AI Prob</th>
                 `;
-            } else {
-                headers += `<th>Trend</th><th>Momentum</th><th style="text-align:right">Rise Score</th>`;
-            }
+                } else {
+                    headers += `<th>Trend</th><th>Momentum</th><th style="text-align:right">Rise Score</th>`;
+                }
 
-            let rows = data.map(item => {
-                const score = item.score;
-                const ai = item.ai_probability || 0;
+                let rows = data.map(item => {
+                    const score = item.score;
+                    const ai = item.ai_probability || 0;
 
-                // Color logic
-                let scoreClass = 'badge-score-low';
-                if (score.total_score >= 80) scoreClass = 'badge-score-high';
-                else if (score.total_score >= 60) scoreClass = 'badge-score-mid';
+                    // Color logic
+                    let scoreClass = 'badge-score-low';
+                    if (score.total_score >= 80) scoreClass = 'badge-score-high';
+                    else if (score.total_score >= 60) scoreClass = 'badge-score-mid';
 
-                const changeColor = score.change_percent >= 0 ? 'var(--success)' : 'var(--danger)';
-                const changeSign = score.change_percent >= 0 ? '+' : '';
+                    const changeColor = score.change_percent >= 0 ? 'var(--success)' : 'var(--danger)';
+                    const changeSign = score.change_percent >= 0 ? '+' : '';
 
-                let extraCols = '';
-                if (CURRENT_TAB === 'technical') {
-                    extraCols = `
+                    let extraCols = '';
+                    if (CURRENT_TAB === 'technical') {
+                        extraCols = `
                         <td>${score.trend_score.toFixed(0)}</td>
                         <td>${score.momentum_score.toFixed(0)}</td>
                         <td style="text-align:right"><span class="badge ${scoreClass}">${score.total_score.toFixed(0)}</span></td>
                     `;
-                } else {
-                    let aiClass = 'var(--text-muted)';
-                    if (ai > 0.3) aiClass = 'var(--success)';
-                    else if (ai > 0.15) aiClass = 'var(--warning)';
+                    } else {
+                        let aiClass = 'var(--text-muted)';
+                        if (ai > 0.3) aiClass = 'var(--success)';
+                        else if (ai > 0.15) aiClass = 'var(--warning)';
 
-                    const pct = (ai * 100).toFixed(1) + '%';
-                    const targetP = item.ai_target_price || (score.last_price * 1.15).toFixed(2);
-                    const stopP = item.ai_stop_price || (score.last_price * 0.95).toFixed(2);
-                    // Rise Score Logic (Color scaling)
-                    const riseScore = score.total_score || 0;
-                    let riseColor = 'var(--text-muted)';
-                    if (riseScore >= 80) riseColor = 'var(--success)';
-                    else if (riseScore >= 60) riseColor = 'var(--warning)';
+                        const pct = (ai * 100).toFixed(1) + '%';
+                        const targetP = item.ai_target_price || (score.last_price * 1.15).toFixed(2);
+                        const stopP = item.ai_stop_price || (score.last_price * 0.95).toFixed(2);
+                        // Rise Score Logic (Color scaling)
+                        const riseScore = score.total_score || 0;
+                        let riseColor = 'var(--text-muted)';
+                        if (riseScore >= 80) riseColor = 'var(--success)';
+                        else if (riseScore >= 60) riseColor = 'var(--warning)';
 
-                    extraCols = `
+                        extraCols = `
                         <td style="color:var(--success)">$${parseFloat(targetP).toFixed(1)}</td>
                         <td style="color:var(--danger)">$${parseFloat(stopP).toFixed(1)}</td>
                         <td style="color:${riseColor}; font-weight:bold;">${riseScore}</td>
                         <td style="color:${aiClass}">${ai > 0.3 ? '🔥 High' : (ai > 0.15 ? '⚡ Med' : '💤 Low')}</td>
                         <td style="text-align:right"><span class="badge badge-ai">${pct}</span></td>
                     `;
-                }
+                    }
 
-                return `
+                    return `
                     <tr onclick="openDetail('${item.ticker}')">
                         <td style="font-weight:bold; color:var(--accent)">${item.ticker}</td>
                         <td style="color:white">${item.name}</td>
@@ -1053,127 +1025,127 @@
                         ${extraCols}
                     </tr>
                 `;
-            }).join('');
+                }).join('');
 
-            container.innerHTML = `
+                container.innerHTML = `
                 <table>
                     <thead><tr>${headers}</tr></thead>
                     <tbody>${rows}</tbody>
                 </table>
             `;
-        }
+            }
 
-        // --- Modal ---
-        async function openDetail(ticker) {
-            const modal = document.getElementById('detailsModal');
-            document.getElementById('searchResults').style.display = 'none';
-            document.getElementById('searchInput').value = '';
+            // --- Modal ---
+            async function openDetail(ticker) {
+                const modal = document.getElementById('detailsModal');
+                document.getElementById('searchResults').style.display = 'none';
+                document.getElementById('searchInput').value = '';
 
-            modal.classList.add('active');
+                modal.classList.add('active');
 
-            // Set Loading
-            document.getElementById('modalTicker').innerText = ticker;
-            document.getElementById('modalPrice').innerText = 'Loading...';
-            document.getElementById('modalAI').innerText = '...';
-            document.getElementById('modalChart').innerHTML = '';
-            document.getElementById('modalStats').innerHTML = '';
-            document.getElementById('modal-analysis').innerText = 'Generating report...';
-            document.getElementById('modal-ai-breakdown').innerHTML = '';
+                // Set Loading
+                document.getElementById('modalTicker').innerText = ticker;
+                document.getElementById('modalPrice').innerText = 'Loading...';
+                document.getElementById('modalAI').innerText = '...';
+                document.getElementById('modalChart').innerHTML = '';
+                document.getElementById('modalStats').innerHTML = '';
+                document.getElementById('modal-analysis').innerText = 'Generating report...';
+                document.getElementById('modal-ai-breakdown').innerHTML = '';
 
-            try {
-                const res = await fetch(`/api/stock/${ticker}`);
-                const data = await res.json();
+                try {
+                    const res = await fetch(`/api/stock/${ticker}`);
+                    const data = await res.json();
 
-                const score = data.score;
-                const ai = data.ai_probability || 0;
-                const analysis = score.analysis || { trend: 'N/A', momentum: 'N/A', setup: 'N/A' };
+                    const score = data.score;
+                    const ai = data.ai_probability || 0;
+                    const analysis = score.analysis || { trend: 'N/A', momentum: 'N/A', setup: 'N/A' };
 
-                // Header
-                document.getElementById('modalTicker').innerText = `${data.ticker} ${score.name || ''}`; // Name might be missing in detail API
-                document.getElementById('modalPrice').innerText = `$${score.last_price.toFixed(2)}`;
-                document.getElementById('modalScoreBadge').innerText = score.total_score.toFixed(0);
+                    // Header
+                    document.getElementById('modalTicker').innerText = `${data.ticker} ${score.name || ''}`; // Name might be missing in detail API
+                    document.getElementById('modalPrice').innerText = `$${score.last_price.toFixed(2)}`;
+                    document.getElementById('modalScoreBadge').innerText = score.total_score.toFixed(0);
 
-                // Color Badge
-                const b = document.getElementById('modalScoreBadge');
-                b.className = 'badge';
-                if (score.total_score >= 80) b.classList.add('badge-score-high');
-                else if (score.total_score >= 60) b.classList.add('badge-score-mid');
-                else b.classList.add('badge-score-low');
+                    // Color Badge
+                    const b = document.getElementById('modalScoreBadge');
+                    b.className = 'badge';
+                    if (score.total_score >= 80) b.classList.add('badge-score-high');
+                    else if (score.total_score >= 60) b.classList.add('badge-score-mid');
+                    else b.classList.add('badge-score-low');
 
-                // AI
-                const aiEl = document.getElementById('modalAI');
-                const aiConf = document.getElementById('modalAIConf');
-                aiEl.innerText = (ai * 100).toFixed(1) + '%';
+                    // AI
+                    const aiEl = document.getElementById('modalAI');
+                    const aiConf = document.getElementById('modalAIConf');
+                    aiEl.innerText = (ai * 100).toFixed(1) + '%';
 
-                // Target / Stop prices
-                const targetP = data.ai_target_price || (score.last_price * 1.15);
-                const stopP = data.ai_stop_price || (score.last_price * 0.95);
-                document.getElementById('modalTarget').innerText = `$${parseFloat(targetP).toFixed(1)}`;
-                document.getElementById('modalStop').innerText = `$${parseFloat(stopP).toFixed(1)}`;
+                    // Target / Stop prices
+                    const targetP = data.ai_target_price || (score.last_price * 1.15);
+                    const stopP = data.ai_stop_price || (score.last_price * 0.95);
+                    document.getElementById('modalTarget').innerText = `$${parseFloat(targetP).toFixed(1)}`;
+                    document.getElementById('modalStop').innerText = `$${parseFloat(stopP).toFixed(1)}`;
 
-                if (ai >= 0.3) {
-                    aiEl.style.color = 'var(--success)';
-                    aiConf.innerText = "🔥 Strong Signal - Sniper Setup!";
-                    aiConf.className = 'ai-confidence-high';
-                } else if (ai >= 0.15) {
-                    aiEl.style.color = 'var(--warning)';
-                    aiConf.innerText = "⚡ Medium Signal";
-                    aiConf.className = 'ai-confidence-med';
-                } else {
-                    aiEl.style.color = 'var(--text-muted)';
-                    aiConf.innerText = "💤 Weak Signal";
-                    aiConf.className = 'ai-confidence-low';
-                }
+                    if (ai >= 0.3) {
+                        aiEl.style.color = 'var(--success)';
+                        aiConf.innerText = "🔥 Strong Signal - Sniper Setup!";
+                        aiConf.className = 'ai-confidence-high';
+                    } else if (ai >= 0.15) {
+                        aiEl.style.color = 'var(--warning)';
+                        aiConf.innerText = "⚡ Medium Signal";
+                        aiConf.className = 'ai-confidence-med';
+                    } else {
+                        aiEl.style.color = 'var(--text-muted)';
+                        aiConf.innerText = "💤 Weak Signal";
+                        aiConf.className = 'ai-confidence-low';
+                    }
 
-                // AI Breakdown (NEW)
-                const breakdownContainer = document.getElementById('modal-ai-breakdown');
-                breakdownContainer.innerHTML = '';
-                const details = data.score.ai_details || {};
+                    // AI Breakdown (NEW)
+                    const breakdownContainer = document.getElementById('modal-ai-breakdown');
+                    breakdownContainer.innerHTML = '';
+                    const details = data.score.ai_details || {};
 
-                if (Object.keys(details).length > 0) {
-                    const weightInfo = document.createElement('div');
-                    weightInfo.style.fontSize = '0.7rem';
-                    weightInfo.style.color = 'var(--text-muted)';
-                    weightInfo.style.marginBottom = '5px';
-                    weightInfo.innerHTML = '⚖️ Voting Consensus (Equal Weight 1/3 each)';
-                    breakdownContainer.appendChild(weightInfo);
+                    if (Object.keys(details).length > 0) {
+                        const weightInfo = document.createElement('div');
+                        weightInfo.style.fontSize = '0.7rem';
+                        weightInfo.style.color = 'var(--text-muted)';
+                        weightInfo.style.marginBottom = '5px';
+                        weightInfo.innerHTML = '⚖️ Voting Consensus (Equal Weight 1/3 each)';
+                        breakdownContainer.appendChild(weightInfo);
 
-                    const itemsContainer = document.createElement('div');
-                    itemsContainer.style.display = 'flex';
-                    itemsContainer.style.gap = '10px';
-                    itemsContainer.style.justifyContent = 'center';
-                    itemsContainer.style.width = '100%';
+                        const itemsContainer = document.createElement('div');
+                        itemsContainer.style.display = 'flex';
+                        itemsContainer.style.gap = '10px';
+                        itemsContainer.style.justifyContent = 'center';
+                        itemsContainer.style.width = '100%';
 
-                    for (const [model, prob] of Object.entries(details)) {
-                        if (model === 'legacy') continue;
-                        const p = (prob * 100).toFixed(0);
-                        const barColor = prob > 0.6 ? 'var(--success)' : (prob > 0.5 ? 'var(--accent)' : 'var(--text-muted)');
+                        for (const [model, prob] of Object.entries(details)) {
+                            if (model === 'legacy') continue;
+                            const p = (prob * 100).toFixed(0);
+                            const barColor = prob > 0.6 ? 'var(--success)' : (prob > 0.5 ? 'var(--accent)' : 'var(--text-muted)');
 
-                        const item = document.createElement('div');
-                        item.style.padding = '4px 10px';
-                        item.style.background = 'rgba(255,255,255,0.05)';
-                        item.style.borderRadius = '6px';
-                        item.style.border = '1px solid var(--border)';
-                        item.style.textAlign = 'center';
-                        item.style.minWidth = '70px';
-                        item.innerHTML = `
+                            const item = document.createElement('div');
+                            item.style.padding = '4px 10px';
+                            item.style.background = 'rgba(255,255,255,0.05)';
+                            item.style.borderRadius = '6px';
+                            item.style.border = '1px solid var(--border)';
+                            item.style.textAlign = 'center';
+                            item.style.minWidth = '70px';
+                            item.innerHTML = `
                             <div style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase;">${model}</div>
                             <div style="font-size: 1rem; font-weight: bold; color: ${barColor};">${p}%</div>
                         `;
-                        itemsContainer.appendChild(item);
+                            itemsContainer.appendChild(item);
+                        }
+                        breakdownContainer.appendChild(itemsContainer);
                     }
-                    breakdownContainer.appendChild(itemsContainer);
-                }
 
-                // AI Analyst Report (Consolidated)
-                document.getElementById('modal-analysis').innerHTML = `
+                    // AI Analyst Report (Consolidated)
+                    document.getElementById('modal-analysis').innerHTML = `
                     <p style="margin:5px 0"><strong style="color:var(--accent)">Trend:</strong> ${analysis.trend}</p>
                     <p style="margin:5px 0"><strong style="color:var(--accent)">Momentum:</strong> ${analysis.momentum}</p>
                     <p style="margin:5px 0"><strong style="color:var(--accent)">Setup:</strong> ${analysis.setup}</p>
                 `;
 
-                // Stats Grid
-                document.getElementById('modalStats').innerHTML = `
+                    // Stats Grid
+                    document.getElementById('modalStats').innerHTML = `
                     <div class="stat-box" title="Based on Price vs SMA 20/60 (Max: 40)">
                         <div class="stat-value">${score.trend_score.toFixed(0)}<span style="font-size:0.7rem; color:var(--text-muted)">/40</span></div>
                         <div class="stat-label">Trend Score</div>
@@ -1188,94 +1160,94 @@
                     </div>
                 `;
 
-                // Chart
-                const history = data.history;
-                if (history && history.length > 0) {
-                    const prices = history.map(h => h.close);
-                    const minP = Math.min(...prices);
-                    const maxP = Math.max(...prices);
-                    const range = maxP - minP || 1;
+                    // Chart
+                    const history = data.history;
+                    if (history && history.length > 0) {
+                        const prices = history.map(h => h.close);
+                        const minP = Math.min(...prices);
+                        const maxP = Math.max(...prices);
+                        const range = maxP - minP || 1;
 
-                    const bars = history.map(h => {
-                        const hPct = ((h.close - minP) / range) * 80 + 10;
-                        return `<div class="chart-bar" style="height:${hPct}%" data-tooltip="${h.date}: ${h.close}"></div>`;
-                    }).join('');
-                    document.getElementById('modalChart').innerHTML = bars;
+                        const bars = history.map(h => {
+                            const hPct = ((h.close - minP) / range) * 80 + 10;
+                            return `<div class="chart-bar" style="height:${hPct}%" data-tooltip="${h.date}: ${h.close}"></div>`;
+                        }).join('');
+                        document.getElementById('modalChart').innerHTML = bars;
+                    }
+
+                } catch (e) {
+                    console.error(e);
                 }
-
-            } catch (e) {
-                console.error(e);
             }
-        }
 
-        function closeModal() {
-            document.getElementById('detailsModal').classList.remove('active');
-        }
-
-        // --- Search ---
-        async function handleSearch(q) {
-            if (q.length < 2) {
-                document.getElementById('searchResults').style.display = 'none';
-                return;
+            function closeModal() {
+                document.getElementById('detailsModal').classList.remove('active');
             }
-            const res = await fetch(`/api/stocks?q=${q}`);
-            const data = await res.json();
-            const div = document.getElementById('searchResults');
 
-            if (data.length) {
-                div.innerHTML = data.map(s =>
-                    `<div class="search-item" onclick="openDetail('${s.code}')">
+            // --- Search ---
+            async function handleSearch(q) {
+                if (q.length < 2) {
+                    document.getElementById('searchResults').style.display = 'none';
+                    return;
+                }
+                const res = await fetch(`/api/stocks?q=${q}`);
+                const data = await res.json();
+                const div = document.getElementById('searchResults');
+
+                if (data.length) {
+                    div.innerHTML = data.map(s =>
+                        `<div class="search-item" onclick="openDetail('${s.code}')">
                         <span style="color:var(--accent); font-weight:bold">${s.code}</span> 
                         <span style="color:white">${s.name}</span>
                     </div>`
-                ).join('');
-                div.style.display = 'block';
-            } else {
-                div.innerHTML = '<div class="search-item">No results</div>';
-                div.style.display = 'block';
-            }
-        }
-
-        // --- Sync ---
-        async function triggerSync() {
-            if (!confirm("Start background sync (~10 mins)?")) return;
-            await fetch('/api/sync', { method: 'POST' });
-            pollSyncStatus();
-        }
-
-        async function pollSyncStatus() {
-            const bar = document.getElementById('progressBar');
-            const fill = document.getElementById('progressFill');
-            const txt = document.getElementById('syncStatus');
-            const syncBarParent = document.getElementById('progressBar'); // The parent container for the progress bar
-            const syncBar = document.getElementById('progressFill'); // The actual fill element
-            const syncLabel = document.getElementById('syncStatus'); // The text label
-
-            const timer = setInterval(async () => {
-                const res = await fetch('/api/sync/status');
-                const data = await res.json(); // Renamed 's' to 'data' for consistency with the provided snippet
-
-                if (data.is_syncing) {
-                    syncBarParent.style.display = 'block';
-                    const percent = (data.current / data.total) * 100;
-                    syncBar.style.width = percent + '%';
-                    let statusText = `Syncing... ${data.current} / ${data.total}`;
-                    if (data.current_ticker) {
-                        statusText += ` <span style="color:var(--primary); font-size:0.8rem; margin-left:10px;">[ ${data.current_ticker} ]</span>`;
-                    }
-                    syncLabel.innerHTML = statusText;
+                    ).join('');
+                    div.style.display = 'block';
                 } else {
-                    syncLabel.innerText = "";
+                    div.innerHTML = '<div class="search-item">No results</div>';
+                    div.style.display = 'block';
                 }
+            }
 
-                if (!data.is_syncing && data.current > 0 && data.current >= data.total) { // Simple done check
-                    clearInterval(timer);
-                    txt.innerText = "Sync Done!";
-                    setTimeout(() => { bar.style.display = 'none'; txt.innerText = ''; fetchData(); }, 2000);
-                }
-            }, 2000);
-        }
-    </script>
+            // --- Sync ---
+            async function triggerSync() {
+                if (!confirm("Start background sync (~10 mins)?")) return;
+                await fetch('/api/sync', { method: 'POST' });
+                pollSyncStatus();
+            }
+
+            async function pollSyncStatus() {
+                const bar = document.getElementById('progressBar');
+                const fill = document.getElementById('progressFill');
+                const txt = document.getElementById('syncStatus');
+                const syncBarParent = document.getElementById('progressBar'); // The parent container for the progress bar
+                const syncBar = document.getElementById('progressFill'); // The actual fill element
+                const syncLabel = document.getElementById('syncStatus'); // The text label
+
+                const timer = setInterval(async () => {
+                    const res = await fetch('/api/sync/status');
+                    const data = await res.json(); // Renamed 's' to 'data' for consistency with the provided snippet
+
+                    if (data.is_syncing) {
+                        syncBarParent.style.display = 'block';
+                        const percent = (data.current / data.total) * 100;
+                        syncBar.style.width = percent + '%';
+                        let statusText = `Syncing... ${data.current} / ${data.total}`;
+                        if (data.current_ticker) {
+                            statusText += ` <span style="color:var(--primary); font-size:0.8rem; margin-left:10px;">[ ${data.current_ticker} ]</span>`;
+                        }
+                        syncLabel.innerHTML = statusText;
+                    } else {
+                        syncLabel.innerText = "";
+                    }
+
+                    if (!data.is_syncing && data.current > 0 && data.current >= data.total) { // Simple done check
+                        clearInterval(timer);
+                        txt.innerText = "Sync Done!";
+                        setTimeout(() => { bar.style.display = 'none'; txt.innerText = ''; fetchData(); }, 2000);
+                    }
+                }, 2000);
+            }
+        </script>
 </body>
 
 </html>

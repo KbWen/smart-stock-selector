@@ -280,6 +280,9 @@ def smart_scan(criteria: List[str] = []):
     Scans Top 100 stocks for composite conditions using CACHED indicators where possible.
     """
     candidates = get_top_scores_from_db(limit=100, sort_by="score")
+    all_stocks = get_cached_stocks()
+    name_map = {s['code']: s['name'] for s in all_stocks}
+    
     results = []
     
     for c in candidates:
@@ -316,10 +319,14 @@ def smart_scan(criteria: List[str] = []):
                 if check_smart_conditions(df, ai_prob, criteria):
                     results.append({
                         "ticker": ticker,
-                        "name": c.get('name', ticker),
+                        "name": name_map.get(ticker, ticker),
                         "ai_probability": ai_prob,
+                        "model_version": c.get('model_version', 'legacy'),
+                        "last_sync": c.get('last_sync'),
                         "score": c, # Return full object for frontend compatibility
                         "price": c.get('last_price', 0),
+                        "ai_target_price": round(c.get('last_price', 0) * 1.15, 2),
+                        "ai_stop_price": round(c.get('last_price', 0) * 0.95, 2),
                         "matches": criteria
                     })
         except:
