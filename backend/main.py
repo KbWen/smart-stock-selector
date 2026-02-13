@@ -4,14 +4,25 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import sys
 import os
+import logging
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 import threading
 import time
 from typing import Optional, List
-from concurrent.futures import ThreadPoolExecutor
 
-# Add parent directory to path
+# Add parent directory to path - MUST BE FIRST for core imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from core import config
+
+# Setup Logging
+logging.basicConfig(
+    level=getattr(logging, config.LOG_LEVEL, logging.INFO),
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[logging.StreamHandler()]
+)
+logger = logging.getLogger(__name__)
 
 from core.data import (
     fetch_stock_data, get_all_tw_stocks, save_score_to_db, 
@@ -48,20 +59,8 @@ async def read_index():
 
 app.mount("/static", StaticFiles(directory=frontend_path, html=True), name="static")
 
-# -- Global Cache for Stock List --
-STOCK_LIST_CACHE = []
-LAST_CACHE_UPDATE = 0
-CACHE_DURATION = 3600 # 1 hour
+# -- Global Cache Removed: Uses get_all_tw_stocks() with @lru_cache now --
 
-def get_cached_stocks():
-    global STOCK_LIST_CACHE, LAST_CACHE_UPDATE
-    if not STOCK_LIST_CACHE or (time.time() - LAST_CACHE_UPDATE > CACHE_DURATION):
-        try:
-            STOCK_LIST_CACHE = get_all_tw_stocks()
-            LAST_CACHE_UPDATE = time.time()
-        except Exception as e:
-            if not STOCK_LIST_CACHE: return []
-    return STOCK_LIST_CACHE
 
 # -- Global State for Sync Progress --
 sync_status = {
@@ -74,76 +73,87 @@ sync_status = {
 
 def run_sync_task():
     global sync_status
+    if sync_status["is_syncing"]:
+        logger.warning("Sync task triggered but already running.")
+        return
+
     sync_status["is_syncing"] = True
-    all_stocks = get_cached_stocks()
-    sync_status["total"] = len(all_stocks)
-    sync_status["current"] = 0
+    logger.info("Starting background sync task...")
     
-    sync_lock = threading.Lock()
-
-    def process_stock(stock):
-        ticker = stock["code"]
-        name = stock["name"]
+    try:
+        all_stocks = get_all_tw_stocks()
+        sync_status["total"] = len(all_stocks)
+        sync_status["current"] = 0
         
-        with sync_lock:
-            sync_status["current_ticker"] = f"{ticker} {name}"
-            
-        try:
-            # Smart Sync: Check version AND timestamp
-            cached = load_indicators_from_db(ticker)
-            current_model_version = get_model_version()
-            
-            should_skip = False
-            if cached:
-                # 1. Check Model Version (MUST match)
-                if cached.get('model_version') == current_model_version:
-                    # 2. Check Timestamp (SQLite might return string)
-                    if isinstance(cached['updated_at'], str):
-                        try:
-                            updated_at = datetime.strptime(cached['updated_at'], '%Y-%m-%d %H:%M:%S.%f')
-                        except ValueError:
-                            updated_at = datetime.strptime(cached['updated_at'], '%Y-%m-%d %H:%M:%S')
-                    else:
-                        updated_at = cached['updated_at']
+        sync_lock = threading.Lock()
 
-                    if datetime.now() - updated_at < timedelta(hours=6):
-                        should_skip = True
-
-            if should_skip:
-                with sync_lock:
-                    sync_status["current"] += 1
-                return
+        def process_stock(stock):
+            ticker = stock["code"]
+            name = stock["name"]
             
-            # Retry logic handled inside fetch_stock_data ideally, 
-            # but we can add simple retry here if needed. 
-            # For now, relying on core.data improvements.
-            df = fetch_stock_data(ticker, days=200, force_download=True)
-            if not df.empty and len(df) >= 60:
-                df = compute_all_indicators(df)
-                score = calculate_rise_score(df)
+            with sync_lock:
+                sync_status["current_ticker"] = f"{ticker} {name}"
                 
-                ai_result = predict_prob(df)
-                ai_prob = 0.0
-                if isinstance(ai_result, dict):
-                    ai_prob = ai_result.get('prob', 0.0)
-                    score['ai_details'] = ai_result.get('details', {})
-                else:
-                    ai_prob = ai_result
-                    
-                save_score_to_db(ticker, score, ai_prob, model_version=current_model_version)
-                save_indicators_to_db(ticker, df, model_version=current_model_version)
-        except Exception as e:
-            print(f"Sync error for {ticker}: {e}")
-            
-        with sync_lock:
-            sync_status["current"] += 1
+            try:
+                # Smart Sync: Check version AND timestamp
+                cached = load_indicators_from_db(ticker)
+                current_model_version = get_model_version()
+                
+                should_skip = False
+                if cached:
+                    # 1. Check Model Version (MUST match)
+                    if cached.get('model_version') == current_model_version:
+                        # 2. Check Timestamp (SQLite might return string)
+                        updated_at = cached['updated_at']
+                        if isinstance(updated_at, str):
+                            try:
+                                updated_at = datetime.strptime(updated_at, '%Y-%m-%d %H:%M:%S.%f')
+                            except ValueError:
+                                updated_at = datetime.strptime(updated_at, '%Y-%m-%d %H:%M:%S')
 
-    # Using 12 workers for faster throughput
-    with ThreadPoolExecutor(max_workers=12) as executor:
-        executor.map(process_stock, all_stocks)
-        
-    sync_status["is_syncing"] = False
-    sync_status["last_updated"] = "Just now"
+                        # Skip if updated within last 6 hours
+                        if datetime.now() - updated_at < timedelta(hours=6):
+                            should_skip = True
+
+                if should_skip:
+                    with sync_lock:
+                        sync_status["current"] += 1
+                    return
+                
+                # Fetch and Process
+                df = fetch_stock_data(ticker, days=200, force_download=True)
+                if not df.empty and len(df) >= 60:
+                    df = compute_all_indicators(df)
+                    score = calculate_rise_score(df)
+                    
+                    ai_result = predict_prob(df)
+                    ai_prob = 0.0
+                    if isinstance(ai_result, dict):
+                        ai_prob = ai_result.get('prob', 0.0)
+                        score['ai_details'] = ai_result.get('details', {})
+                    else:
+                        ai_prob = ai_result
+                        
+                    save_score_to_db(ticker, score, ai_prob, model_version=current_model_version)
+                    save_indicators_to_db(ticker, df, model_version=current_model_version)
+            except Exception as e:
+                logger.error(f"Sync error for {ticker}: {e}")
+                
+            with sync_lock:
+                sync_status["current"] += 1
+
+        # Using Configured Concurrency Workers
+        logger.info(f"Syncing with {config.CONCURRENCY_WORKERS} workers.")
+        with ThreadPoolExecutor(max_workers=config.CONCURRENCY_WORKERS) as executor:
+            executor.map(process_stock, all_stocks)
+            
+        logger.info("Sync task completed successfully.")
+            
+    except Exception as e:
+        logger.error(f"Fatal error in run_sync_task: {e}")
+    finally:
+        sync_status["is_syncing"] = False
+        sync_status["last_updated"] = "Just now"
 
 @app.post("/api/sync")
 def trigger_sync(background_tasks: BackgroundTasks):
@@ -159,7 +169,7 @@ def get_sync_status():
 
 @app.get("/api/stocks")
 def search_stocks(q: Optional[str] = None):
-    all_stocks = get_cached_stocks()
+    all_stocks = get_all_tw_stocks()
     if not q:
         return all_stocks[:50]
     
@@ -175,7 +185,7 @@ def get_top_picks(sort: str = "score"):
     picks = get_top_scores_from_db(limit=50, sort_by=sort)
     
     if picks:
-        all_stocks_list = get_cached_stocks()
+        all_stocks_list = get_all_tw_stocks()
         name_map = {s['code']: s['name'] for s in all_stocks_list}
         
         result = []
@@ -270,7 +280,7 @@ def smart_scan(criteria: List[str] = []):
     Scans Top 100 stocks for composite conditions using CACHED indicators where possible.
     """
     candidates = get_top_scores_from_db(limit=100, sort_by="score")
-    all_stocks = get_cached_stocks()
+    all_stocks = get_all_tw_stocks()
     name_map = {s['code']: s['name'] for s in all_stocks}
     
     results = []
@@ -324,6 +334,28 @@ def smart_scan(criteria: List[str] = []):
             
     return results
 
+@app.get("/api/health")
+def health_check():
+    """System Health Check Endpoint"""
+    health_status = {
+        "status": "ok",
+        "timestamp": datetime.now().isoformat(),
+        "db": "disconnected",
+        "model_version": get_model_version(),
+        "concurrency_workers": config.CONCURRENCY_WORKERS
+    }
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT 1")
+        conn.close()
+        health_status["db"] = "connected"
+    except Exception as e:
+        health_status["status"] = "error"
+        health_status["db"] = str(e)
+        
+    return health_status
+
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
@@ -336,9 +368,10 @@ if __name__ == "__main__":
         print("Sync Complete.")
     else:
         try:
-            get_cached_stocks()
-        except:
-            pass
+            get_all_tw_stocks() # Pre-cache stocks
+            logger.info("Stock list cached successfully.")
+        except Exception as e:
+            logger.error(f"Failed to cache stock list: {e}")
 
         import uvicorn
         uvicorn.run(app, host="0.0.0.0", port=8000)

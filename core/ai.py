@@ -5,15 +5,16 @@ from sklearn.model_selection import TimeSeriesSplit
 from sklearn.metrics import classification_report
 import joblib
 import os
+from core import config
 
 # ===== SNIPER STRATEGY PARAMETERS =====
-PRED_DAYS = 20       # Look-ahead window (max 20 trading days)
-TARGET_GAIN = 0.15   # +15% profit target
-STOP_LOSS = 0.05     # -5% stop loss
+PRED_DAYS = config.PRED_DAYS       # Look-ahead window (max 20 trading days)
+TARGET_GAIN = config.TARGET_GAIN   # +15% profit target
+STOP_LOSS = config.STOP_LOSS     # -5% stop loss
 # Win = price hits +15% BEFORE it hits -5% within 20 days
 # This is a 3:1 Risk/Reward ratio
 
-MODEL_PATH = os.path.join(os.path.dirname(__file__), "../model_sniper.pkl")
+MODEL_PATH = config.MODEL_PATH
 
 # Global variable to track the currently loaded model version
 CURRENT_MODEL_VERSION = "unknown"

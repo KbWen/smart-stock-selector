@@ -12,7 +12,9 @@ from core.analysis import calculate_rise_score
 from core.features import compute_all_indicators
 from core.ai import predict_prob
 
-MODEL_PATH = os.path.join(os.path.dirname(__file__), "../model_sniper.pkl")
+from core import config
+
+MODEL_PATH = config.MODEL_PATH
 if not os.path.exists(MODEL_PATH):
     print(f"⚠️ WARNING: AI model not found at {MODEL_PATH}")
 

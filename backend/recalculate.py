@@ -1,10 +1,12 @@
 import sys
 import os
 import pandas as pd
-import time
 
-# Add parent dir
+# Add parent directory to path to find 'core'
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+import logging
+from core import config
 
 from core.data import get_db_connection, save_score_to_db, load_from_db
 from core.analysis import (
@@ -13,16 +15,24 @@ from core.analysis import (
 from core.features import compute_all_indicators
 from core.ai import predict_prob, get_model_version
 
+# Setup Logging
+logging.basicConfig(
+    level=getattr(logging, config.LOG_LEVEL, logging.INFO),
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[logging.StreamHandler()]
+)
+logger = logging.getLogger(__name__)
+
 def recalculate_all():
-    print("=" * 60)
-    print("Full Score & AI Recalculation")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("Full Score & AI Recalculation")
+    logger.info("=" * 60)
     
     conn = get_db_connection()
     tickers = pd.read_sql("SELECT DISTINCT ticker FROM stock_history", conn)['ticker'].tolist()
     conn.close()
     
-    print(f"Found {len(tickers)} stocks in history DB.")
+    logger.info(f"Found {len(tickers)} stocks in history DB.")
     
     count = 0
     updated = 0
@@ -65,17 +75,17 @@ def recalculate_all():
         except Exception as e:
             errors += 1
             if errors <= 5:
-                print(f"Error {ticker}: {e}")
+                logger.error(f"Error {ticker}: {e}")
             
         count += 1
         if count % 100 == 0:
-            print(f"Processed {count}/{len(tickers)} (Updated: {updated})...")
+            logger.info(f"Processed {count}/{len(tickers)} (Updated: {updated})...")
             
-    print(f"\nRecalculation complete!")
-    print(f"  Processed: {count}")
-    print(f"  Updated:   {updated}")
-    print(f"  Errors:    {errors}")
-    print("=" * 60)
+    logger.info(f"\nRecalculation complete!")
+    logger.info(f"  Processed: {count}")
+    logger.info(f"  Updated:   {updated}")
+    logger.info(f"  Errors:    {errors}")
+    logger.info("=" * 60)
 
 if __name__ == "__main__":
     recalculate_all()

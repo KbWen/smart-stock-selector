@@ -6,11 +6,11 @@ import os
 import twstock
 import time
 from datetime import datetime, timedelta
-
-DB_PATH = os.path.join(os.path.dirname(__file__), "../storage.db")
+from functools import lru_cache
+from core import config
 
 def get_db_connection():
-    conn = sqlite3.connect(DB_PATH, timeout=30.0) # Increase timeout for concurrency
+    conn = sqlite3.connect(config.DB_PATH, timeout=config.DB_TIMEOUT) 
     conn.row_factory = sqlite3.Row # Return dict-like rows
     return conn
 
@@ -135,8 +135,9 @@ def load_indicators_from_db(ticker):
     finally:
         conn.close()
 
+@lru_cache(maxsize=1)
 def get_all_tw_stocks():
-    """Returns a list of all TWSE stock codes."""
+    """Returns a list of all TWSE stock codes. Cached to avoid slow iteration."""
     stocks = []
     # This loop is slow if run every time. Upper layer caches it.
     for code, info in twstock.codes.items():

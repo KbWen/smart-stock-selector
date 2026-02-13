@@ -445,6 +445,102 @@
             color: var(--text-muted);
         }
 
+        /* Skeleton Loading */
+        .skeleton {
+            background: linear-gradient(90deg, #1e293b 25%, #2d3e5a 50%, #1e293b 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s infinite;
+            border-radius: 4px;
+        }
+
+        @keyframes shimmer {
+            0% {
+                background-position: 200% 0;
+            }
+
+            100% {
+                background-position: -200% 0;
+            }
+        }
+
+        .skeleton-text {
+            height: 16px;
+            margin-bottom: 8px;
+        }
+
+        .skeleton-title {
+            height: 24px;
+            margin-bottom: 15px;
+            width: 60%;
+        }
+
+        /* Toasts */
+        #toastContainer {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .toast {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-left: 4px solid var(--accent);
+            padding: 12px 20px;
+            border-radius: 8px;
+            min-width: 200px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+            animation: slideInRight 0.3s forwards;
+        }
+
+        @keyframes slideInRight {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .toast-success {
+            border-left-color: var(--success);
+        }
+
+        .toast-error {
+            border-left-color: var(--danger);
+        }
+
+        /* Language Toggle */
+        .lang-toggle {
+            display: flex;
+            background: #1e293b;
+            border-radius: 20px;
+            padding: 2px;
+            border: 1px solid var(--border);
+        }
+
+        .lang-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            padding: 4px 12px;
+            font-size: 0.75rem;
+            cursor: pointer;
+            border-radius: 18px;
+            font-weight: bold;
+        }
+
+        .lang-btn.active {
+            background: var(--accent);
+            color: #0f172a;
+        }
+
         @keyframes fadeIn {
             from {
                 opacity: 0;
@@ -471,14 +567,20 @@
                     <input type="text" class="search-input" placeholder="Search Ticker / Name..." id="searchInput">
                     <div class="search-results" id="searchResults"></div>
                 </div>
+                <div class="lang-toggle" style="margin-right: 10px;">
+                    <button class="lang-btn" id="lang-tw" onclick="setLang('tw')">中文</button>
+                    <button class="lang-btn" id="lang-en" onclick="setLang('en')">EN</button>
+                </div>
                 <button class="btn btn-primary" onclick="triggerSync()">
-                    <span>🔄</span> Sync Data
+                    <span id="label-sync-icon">🔄</span> <span id="label-sync-text">Sync Data</span>
                 </button>
                 <button class="btn" onclick="fetchData()">
-                    <span>⚡</span> Refresh
+                    <span id="label-refresh-icon">⚡</span> <span id="label-refresh-text">Refresh</span>
                 </button>
             </div>
         </header>
+
+        <div id="toastContainer"></div>
 
         <div class="progress-bar" id="progressBar">
             <div class="progress-fill" id="progressFill"></div>
@@ -565,23 +667,142 @@
                 backtest: { status: 'idle', data: null, html: null },
                 smartScan: { status: 'idle', data: null },
                 ai: { status: 'idle', data: null },
-                technical: { status: 'idle', data: null }
+                technical: { status: 'idle', data: null },
+                lang: localStorage.getItem('lang') || 'tw',
+                sortCol: null,
+                sortDir: 'desc'
             };
+
+            const TRANSLATIONS = {
+                tw: {
+                    title: "Smart Stock Selector",
+                    sync: "同步數據",
+                    refresh: "重新整理",
+                    tab_tech: "🔥 技術面強勢",
+                    tab_ai: "🤖 AI 回測排名",
+                    tab_scan: "🔔 智慧篩選",
+                    tab_backtest: "🧪 回測實驗室",
+                    loading: "載入中...",
+                    searching: "掃描市場中...",
+                    no_results: "查無標的。請先同步數據。",
+                    sync_done: "同步完成！",
+                    syncing: "同步中...",
+                    col_ticker: "代號",
+                    col_name: "名稱",
+                    col_price: "股價",
+                    col_change: "漲跌",
+                    col_target: "目標",
+                    col_stop: "停損",
+                    col_rise: "總分",
+                    col_signal: "訊號",
+                    col_ai: "AI 勝率",
+                    col_trend: "趨勢",
+                    col_momt: "動能",
+                    btn_run_sim: "🚀 執行 30 天模擬",
+                    search_hint: "搜尋代號 / 名稱...",
+                    manual_title: "🤖 Ensemble AI 預測邏輯 (Sniper Strategy)",
+                    manual_desc: "透過三個異質 ML 模型投票產生的共識勝率預測。",
+                    tip_1_title: "1. AI 共識",
+                    tip_1_desc: "三模型均 > 60% 時訊號最強。",
+                    tip_2_title: "2. 關聯性",
+                    tip_2_desc: "AI 高分 + Rise Score 高分 = 強勢突破。",
+                    tip_3_title: "3. 大盤風險",
+                    tip_3_desc: "若大盤走空，所有勝率下修 10-20%。",
+                    backtest_title: "🧪 Time Machine 回測",
+                    backtest_desc: "使用過去的數據來驗證 AI 模型的實戰表現。這可以回答：'如果我 30 天前跟著 AI 買，現在賺多少？'",
+                    rise_score_title: "🔥 Rise Score (啟動分數)",
+                    rise_score_desc: "基於 Trend(40%) + Momentum(30%) + Volatility(30%) 權重計算的技術面總分。"
+                },
+                en: {
+                    title: "Smart Stock Selector",
+                    sync: "Sync Data",
+                    refresh: "Refresh",
+                    tab_tech: "🔥 Technical",
+                    tab_ai: "🤖 AI Ranking",
+                    tab_scan: "🔔 Smart Scans",
+                    tab_backtest: "🧪 Backtest",
+                    loading: "Loading...",
+                    searching: "Scanning Market...",
+                    no_results: "No stocks found. Try syncing data first.",
+                    sync_done: "Sync Done!",
+                    syncing: "Syncing...",
+                    col_ticker: "Ticker",
+                    col_name: "Name",
+                    col_price: "Price",
+                    col_change: "Change",
+                    col_target: "Target",
+                    col_stop: "Stop",
+                    col_rise: "Rise",
+                    col_signal: "Signal",
+                    col_ai: "AI Prob",
+                    col_trend: "Trend",
+                    col_momt: "Momt",
+                    btn_run_sim: "🚀 Run 30-Day Simulation",
+                    search_hint: "Search Ticker / Name...",
+                    manual_title: "🤖 Ensemble AI Logic (Sniper Strategy)",
+                    manual_desc: "Consensus win probability based on three heterogeneous ML models.",
+                    tip_1_title: "1. Consensus",
+                    tip_1_desc: "Signals are strongest when all three models > 60%.",
+                    tip_2_title: "2. Correlation",
+                    tip_2_desc: "High AI prob + High Rise Score = Strong Breakout.",
+                    tip_3_title: "3. Market Risk",
+                    tip_3_desc: "If market is bearish, win rates drop by 10-20%.",
+                    backtest_title: "🧪 Time Machine Backtest",
+                    backtest_desc: "Verify AI performance by simulating a buy 30 days ago.",
+                    rise_score_title: "🔥 Rise Score (Launch Score)",
+                    rise_score_desc: "Technical score based on Trend(40%) + Momentum(30%) + Volatility(30%)."
+                }
+            };
+
+            function i18n(key) {
+                return TRANSLATIONS[APP_STATE.lang][key] || key;
+            }
+
+            function setLang(l) {
+                APP_STATE.lang = l;
+                localStorage.setItem('lang', l);
+                updateLanguageUI();
+                // Rerender current tab
+                renderTabFromState_or_Fetch();
+            }
+
+            function updateLanguageUI() {
+                // Background update buttons
+                document.querySelectorAll('.lang-btn').forEach(b => b.classList.remove('active'));
+                document.getElementById(`lang-${APP_STATE.lang}`).classList.add('active');
+
+                // Labels
+                document.getElementById('label-sync-text').innerText = i18n('sync');
+                document.getElementById('label-refresh-text').innerText = i18n('refresh');
+                document.getElementById('searchInput').placeholder = i18n('search_hint');
+
+                // Tab Buttons
+                const tabButtons = document.querySelectorAll('.tab-btn');
+                tabButtons[0].innerText = i18n('tab_tech');
+                tabButtons[1].innerText = i18n('tab_ai');
+                tabButtons[2].innerText = i18n('tab_scan');
+                tabButtons[3].innerText = i18n('tab_backtest');
+
+                updateDefinitionCard();
+            }
+
+            function showToast(msg, type = 'accent') {
+                const container = document.getElementById('toastContainer');
+                const toast = document.createElement('div');
+                toast.className = `toast toast-${type}`;
+                toast.innerText = msg;
+                container.appendChild(toast);
+                setTimeout(() => {
+                    toast.style.opacity = '0';
+                    setTimeout(() => toast.remove(), 300);
+                }, 3000);
+            }
 
             // --- Init ---
             document.addEventListener('DOMContentLoaded', () => {
-                updateDefinitionCard();
-                renderTabFromState_or_Fetch(); // Use new render logic
-                pollSyncStatus();
-
-                // Search Debounce
-                let debounceTimer;
-                document.getElementById('searchInput').addEventListener('input', (e) => {
-                    clearTimeout(debounceTimer);
-                    debounceTimer = setTimeout(() => handleSearch(e.target.value), 300);
-                });
                 // Initial UI Update
-                updateDefinitionCard();
+                updateLanguageUI();
+                pollSyncStatus();
             });
 
             // --- Tabs ---
@@ -600,6 +821,7 @@
                 abortController = new AbortController();
 
                 CURRENT_TAB = tab;
+                document.getElementById('searchInput').value = ''; // Clear search
                 document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
                 document.querySelector(`.tab-btn[data-target="${tab}"]`).classList.add('active');
                 updateDefinitionCard();
@@ -661,8 +883,8 @@
                     card.innerHTML = `
                     <div style="display: flex; gap: 20px; align-items: center;">
                         <div style="flex: 1;">
-                            <strong style="color: var(--success); display: block; margin-bottom: 5px;">🔥 Rise Score (Heuristic Score)</strong>
-                            基於 Trend(40%) + Momentum(30%) + Volatility(30%) 權重計算的技術面總分。
+                            <strong style="color: var(--success); display: block; margin-bottom: 5px;">${i18n('rise_score_title')}</strong>
+                            ${i18n('rise_score_desc')}
                         </div>
                     </div>
                 `;
@@ -674,13 +896,13 @@
                     let sniperManual = `
                     <div style="width: 100%; margin-top: 15px; display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; padding-top: 15px; border-top: 1px solid rgba(168, 85, 247, 0.1);">
                         <div style="font-size: 0.8rem;">
-                            <b style="color: var(--success)">1. AI 共識 (Consensus)</b>: 三模型均 > 60% 時訊號最強。
+                            <b style="color: var(--success)">${i18n('tip_1_title')}</b>: ${i18n('tip_1_desc')}
                         </div>
                         <div style="font-size: 0.8rem;">
-                            <b style="color: var(--accent)">2. 關聯性 (Correlation)</b>: AI 高分 + Rise Score 高分 = 強勢突破。
+                            <b style="color: var(--accent)">${i18n('tip_2_title')}</b>: ${i18n('tip_2_desc')}
                         </div>
                         <div style="font-size: 0.8rem;">
-                            <b style="color: var(--error)">3. 大盤風險 (System Risk)</b>: 若大盤走空，所有勝率下修 10-20%。
+                            <b style="color: var(--danger)">${i18n('tip_3_title')}</b>: ${i18n('tip_3_desc')}
                         </div>
                     </div>
                 `;
@@ -690,12 +912,12 @@
                         <div style="display: flex; gap: 20px; flex-wrap: wrap; align-items: center;">
                             <div style="flex: 1; min-width: 250px;">
                                 <strong style="color: var(--ai-color); display: block; margin-bottom: 5px;">
-                                    ${isAI ? '🤖 Ensemble AI 預測邏輯 (Sniper Strategy)' : '🔔 Smart Alerts (複合策略)'}
+                                    ${isAI ? i18n('manual_title') : i18n('tab_scan')}
                                 </strong>
-                                ${isAI ? '透過三個異質 ML 模型投票產生的共識勝率預測。' : '篩選符合特定「AI + 技術面」組合條件的潛力股。'}
+                                ${isAI ? i18n('manual_desc') : i18n('searching')}
                             </div>
                             ${!isAI ? `
-                            <div style="flex: 2; display: flex; gap: 15px; flex-wrap: wrap; align-items: center;">
+                            <div style="display: flex; gap: 15px; flex-wrap: wrap; align-items: center;">
                                 <label><input type="checkbox" id="chk-high-ai" checked onchange="fetchSmartScan()"> High AI (>70%)</label>
                                 <label><input type="checkbox" id="chk-vol-surge" onchange="fetchSmartScan()"> Volume Surge (>1.5x)</label>
                                 <label><input type="checkbox" id="chk-kd-gold" onchange="fetchSmartScan()"> KD Golden Cross</label>
@@ -716,18 +938,30 @@
                     card.style.background = 'rgba(34, 197, 94, 0.05)';
                     card.innerHTML = `
                     <div style="display: flex; gap: 20px; align-items: center;">
-                         <strong style="color: var(--success); font-size: 1.1rem;">🧪 Time Machine Backtest</strong>
-                         <div>使用過去的數據來驗證 AI 模型的實戰表現。這可以回答："如果我 30 天前跟著 AI 買，現在賺多少？"</div>
-                         <button class="btn btn-primary" onclick="runBacktest()" style="margin-left: auto;">🚀 Run 30-Day Sim</button>
+                         <strong style="color: var(--success); font-size: 1.1rem;">${i18n('backtest_title')}</strong>
+                         <div>${i18n('backtest_desc')}</div>
+                         <button class="btn btn-primary" onclick="runBacktest()" style="margin-left: auto;">${i18n('btn_run_sim')}</button>
                     </div>
                  `;
                 }
             }
 
+            function renderSkeleton(container, rowCount = 10) {
+                let html = '<table><thead><tr>';
+                // Dummy headers
+                for (let i = 0; i < 5; i++) html += '<th><div class="skeleton" style="height:12px; width:50px;"></div></th>';
+                html += '</tr></thead><tbody>';
+                for (let i = 0; i < rowCount; i++) {
+                    html += `<tr>${'<td><div class="skeleton" style="height:16px;"></div></td>'.repeat(5)}</tr>`;
+                }
+                html += '</tbody></table>';
+                container.innerHTML = html;
+            }
+
             // --- Fetch Data ---
             async function fetchData() {
                 const container = document.getElementById('table-container');
-                container.innerHTML = '<div class="loading">Loading...</div>';
+                renderSkeleton(container);
 
                 try {
                     let url = '/api/top_picks?sort=score';
@@ -787,7 +1021,8 @@
                 if (document.getElementById('chk-macd-bull')?.checked) criteria.push('macd_bull');
 
 
-                container.innerHTML = '<div class="loading">Scanning Market...</div>';
+                container.innerHTML = `<div class="loading">${i18n('searching')}</div>`;
+                renderSkeleton(container);
 
                 try {
                     const res = await fetch('/api/smart_scan', {
@@ -958,35 +1193,75 @@
                 }
             }
 
+            function handleSort(col) {
+                if (APP_STATE.sortCol === col) {
+                    APP_STATE.sortDir = APP_STATE.sortDir === 'asc' ? 'desc' : 'asc';
+                } else {
+                    APP_STATE.sortCol = col;
+                    APP_STATE.sortDir = 'desc';
+                }
+
+                // Get current data source
+                let data = [];
+                if (CURRENT_TAB === 'smart-scan') data = APP_STATE.smartScan.data;
+                else if (CURRENT_TAB === 'ai') data = APP_STATE.ai.data;
+                else data = APP_STATE.technical.data;
+
+                if (!data) return;
+
+                const sorted = [...data].sort((a, b) => {
+                    let valA, valB;
+                    if (col === 'ticker') { valA = a.ticker; valB = b.ticker; }
+                    else if (col === 'price') { valA = a.score?.last_price || a.price || 0; valB = b.score?.last_price || b.price || 0; }
+                    else if (col === 'change') { valA = a.score?.change_percent || 0; valB = b.score?.change_percent || 0; }
+                    else if (col === 'target') { valA = a.ai_target_price || 0; valB = b.ai_target_price || 0; }
+                    else if (col === 'rise') { valA = a.score?.total_score || 0; valB = b.score?.total_score || 0; }
+                    else if (col === 'ai') { valA = a.ai_probability || 0; valB = b.ai_probability || 0; }
+                    else if (col === 'trend') { valA = a.score?.trend_score || 0; valB = b.score?.trend_score || 0; }
+                    else if (col === 'momt') { valA = a.score?.momentum_score || 0; valB = b.score?.momentum_score || 0; }
+
+                    if (valA < valB) return APP_STATE.sortDir === 'asc' ? -1 : 1;
+                    if (valA > valB) return APP_STATE.sortDir === 'asc' ? 1 : -1;
+                    return 0;
+                });
+
+                renderTable(sorted);
+            }
+
             function renderTable(data) {
                 const container = document.getElementById('table-container');
                 if (data.length === 0) {
-                    container.innerHTML = '<div class="loading">No stocks found. Try syncing data first.</div>';
+                    container.innerHTML = `<div class="loading">${i18n('no_results')}</div>`;
                     return;
                 }
 
+                const sortIcon = (col) => {
+                    if (APP_STATE.sortCol !== col) return '↕️';
+                    return APP_STATE.sortDir === 'asc' ? '🔼' : '🔽';
+                };
+
                 // Headers
                 let headers = `
-                    <th>Ticker</th>
-                    <th style="min-width: 100px;">Name</th>
-                    <th style="text-align:right">Price</th>
-                    <th style="text-align:right">Change</th>
+                    <th onclick="handleSort('ticker')" style="cursor:pointer" title="Stock Ticker Symbol">${i18n('col_ticker')} ${sortIcon('ticker')}</th>
+                    <th style="min-width: 100px;">${i18n('col_name')}</th>
+                    <th onclick="handleSort('price')" style="cursor:pointer; text-align:right" title="Last Close Price">${i18n('col_price')} ${sortIcon('price')}</th>
+                    <th onclick="handleSort('change')" style="cursor:pointer; text-align:right" title="Daily Change %">${i18n('col_change')} ${sortIcon('change')}</th>
                 `;
                 const isAIBased = (CURRENT_TAB === 'ai' || CURRENT_TAB === 'smart-scan');
 
                 if (isAIBased) {
                     headers += `
-                        <th style="text-align:right"><i class="fas fa-bullseye"></i> Target</th>
-                        <th style="text-align:right"><i class="fas fa-hand-paper"></i> Stop</th>
-                        <th style="text-align:right"><i class="fas fa-ruler-combined"></i> Rise</th>
-                        <th style="text-align:center"><i class="fas fa-signal"></i> Signal</th>
-                        <th style="text-align:right"><i class="fas fa-brain"></i> AI Prob</th>
+                        <th onclick="handleSort('target')" style="cursor:pointer; text-align:right" title="AI Predicted 20-Day Target">${i18n('col_target')} ${sortIcon('target')}</th>
+                        <th style="text-align:right" title="AI Recommended Stop Loss">${i18n('col_stop')}</th>
+                        <th onclick="handleSort('rise')" style="cursor:pointer; text-align:right" title="Heuristic Score (Trend + Momt + Vol)">${i18n('col_rise')} ${sortIcon('rise')}</th>
+                        <th style="text-align:center" title="Technical Signal Icon">${i18n('col_signal')}</th>
+                        <th onclick="handleSort('ai')" style="cursor:pointer; text-align:right" title="Ensemble AI Win Probability">${i18n('col_ai')} ${sortIcon('ai')}</th>
                     `;
                 } else {
                     headers += `
-                        <th style="text-align:right">Trend</th>
-                        <th style="text-align:right">Momt</th>
-                        <th style="text-align:right">Score</th>
+                        <th onclick="handleSort('trend')" style="cursor:pointer; text-align:right" title="SMA 20/60 Alignment Score">${i18n('col_trend')} ${sortIcon('trend')}</th>
+                        <th onclick="handleSort('momt')" style="cursor:pointer; text-align:right" title="RSI & KD Momentum Score">${i18n('col_momt')} ${sortIcon('momt')}</th>
+                        <th onclick="handleSort('rise')" style="cursor:pointer; text-align:right" title="Combined Technical Launch Score">${i18n('col_rise')} ${sortIcon('rise')}</th>
                     `;
                 }
 
@@ -1214,34 +1489,40 @@
             }
 
             // --- Search ---
-            async function handleSearch(q) {
-                if (q.length < 2) {
-                    document.getElementById('searchResults').style.display = 'none';
+            function handleSearch(q) {
+                const query = q.toLowerCase();
+                if (query.length === 0) {
+                    renderTabFromState_or_Fetch();
                     return;
                 }
-                const res = await fetch(`/api/stocks?q=${q}`);
-                const data = await res.json();
-                const div = document.getElementById('searchResults');
 
-                if (data.length) {
-                    div.innerHTML = data.map(s =>
-                        `<div class="search-item" onclick="openDetail('${s.code}')">
-                        <span style="color:var(--accent); font-weight:bold">${s.code}</span> 
-                        <span style="color:white">${s.name}</span>
-                    </div>`
-                    ).join('');
-                    div.style.display = 'block';
-                } else {
-                    div.innerHTML = '<div class="search-item">No results</div>';
-                    div.style.display = 'block';
-                }
+                let data = [];
+                if (CURRENT_TAB === 'smart-scan') data = APP_STATE.smartScan.data;
+                else if (CURRENT_TAB === 'ai') data = APP_STATE.ai.data;
+                else data = APP_STATE.technical.data;
+
+                if (!data) return;
+
+                const filtered = data.filter(item =>
+                    item.ticker.toLowerCase().includes(query) ||
+                    (item.name || '').toLowerCase().includes(query)
+                );
+
+                renderTable(filtered);
             }
 
             // --- Sync ---
             async function triggerSync() {
-                if (!confirm("Start background sync (~10 mins)?")) return;
-                await fetch('/api/sync', { method: 'POST' });
-                pollSyncStatus();
+                const label = i18n('sync');
+                if (!confirm(`${label}? (~10 mins)`)) return;
+
+                try {
+                    await fetch('/api/sync', { method: 'POST' });
+                    showToast(i18n('syncing'), 'accent');
+                    pollSyncStatus();
+                } catch (e) {
+                    showToast("Sync Start Failed", 'error');
+                }
             }
 
             async function pollSyncStatus() {
@@ -1271,7 +1552,8 @@
 
                     if (!data.is_syncing && data.current > 0 && data.current >= data.total) { // Simple done check
                         clearInterval(timer);
-                        txt.innerText = "Sync Done!";
+                        txt.innerText = i18n('sync_done');
+                        showToast(i18n('sync_done'), 'success');
                         setTimeout(() => { bar.style.display = 'none'; txt.innerText = ''; fetchData(); }, 2000);
                     }
                 }, 2000);
