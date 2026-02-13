@@ -661,6 +661,7 @@
             let CURRENT_TAB = 'technical'; // 'technical' or 'ai'
             let abortController = null; // Global controller for cancelling requests
             let SELECTED_TICKER = null; // Track selected stock
+            let searchTimeout = null; // Debounce timer
 
             // Global State for Caching & Persistence
             const APP_STATE = {
@@ -1201,53 +1202,57 @@
                     APP_STATE.sortDir = 'desc';
                 }
 
-                // Get current data source
-                let data = [];
-                if (CURRENT_TAB === 'smart-scan') data = APP_STATE.smartScan.data;
-                else if (CURRENT_TAB === 'ai') data = APP_STATE.ai.data;
-                else data = APP_STATE.technical.data;
+                const table = document.querySelector('table');
+                if (!table) return;
+                const tbody = table.querySelector('tbody');
+                const rows = Array.from(tbody.querySelectorAll('tr'));
 
-                if (!data) return;
-
-                const sorted = [...data].sort((a, b) => {
+                // Sort DOM rows directly
+                rows.sort((a, b) => {
                     let valA, valB;
-                    if (col === 'ticker') { valA = a.ticker; valB = b.ticker; }
-                    else if (col === 'price') { valA = a.score?.last_price || a.price || 0; valB = b.score?.last_price || b.price || 0; }
-                    else if (col === 'change') { valA = a.score?.change_percent || 0; valB = b.score?.change_percent || 0; }
-                    else if (col === 'target') { valA = a.ai_target_price || 0; valB = b.ai_target_price || 0; }
-                    else if (col === 'rise') { valA = a.score?.total_score || 0; valB = b.score?.total_score || 0; }
-                    else if (col === 'ai') { valA = a.ai_probability || 0; valB = b.ai_probability || 0; }
-                    else if (col === 'trend') { valA = a.score?.trend_score || 0; valB = b.score?.trend_score || 0; }
-                    else if (col === 'momt') { valA = a.score?.momentum_score || 0; valB = b.score?.momentum_score || 0; }
 
-                    if (valA < valB) return APP_STATE.sortDir === 'asc' ? -1 : 1;
-                    if (valA > valB) return APP_STATE.sortDir === 'asc' ? 1 : -1;
-                    return 0;
+                    // Helper to get value from data attributes or text
+                    const getCellValue = (row, field) => {
+                        const cell = row.querySelector(`[data-field="${field}"]`);
+                        return cell ? cell.getAttribute('data-value') : '';
+                    };
+
+                    valA = getCellValue(a, col);
+                    valB = getCellValue(b, col);
+
+                    // Numeric comparison if both are numbers
+                    if (!isNaN(valA) && !isNaN(valB) && valA !== '' && valB !== '') {
+                        return (parseFloat(valA) - parseFloat(valB)) * (APP_STATE.sortDir === 'asc' ? 1 : -1);
+                    }
+
+                    // String comparison
+                    return valA.localeCompare(valB) * (APP_STATE.sortDir === 'asc' ? 1 : -1);
                 });
 
-                renderTable(sorted);
+                // Re-append in new order (appendChild moves existing nodes)
+                rows.forEach(row => tbody.appendChild(row));
+
+                // Update header icons (simple way: render headers again or just update icons)
+                renderTableHeaders();
             }
 
-            function renderTable(data) {
-                const container = document.getElementById('table-container');
-                if (data.length === 0) {
-                    container.innerHTML = `<div class="loading">${i18n('no_results')}</div>`;
-                    return;
-                }
+            function renderTableHeaders() {
+                const table = document.querySelector('table');
+                if (!table) return;
+                const thead = table.querySelector('thead');
 
                 const sortIcon = (col) => {
                     if (APP_STATE.sortCol !== col) return '↕️';
                     return APP_STATE.sortDir === 'asc' ? '🔼' : '🔽';
                 };
 
-                // Headers
+                const isAIBased = (CURRENT_TAB === 'ai' || CURRENT_TAB === 'smart-scan');
                 let headers = `
                     <th onclick="handleSort('ticker')" style="cursor:pointer" title="Stock Ticker Symbol">${i18n('col_ticker')} ${sortIcon('ticker')}</th>
                     <th style="min-width: 100px;">${i18n('col_name')}</th>
                     <th onclick="handleSort('price')" style="cursor:pointer; text-align:right" title="Last Close Price">${i18n('col_price')} ${sortIcon('price')}</th>
                     <th onclick="handleSort('change')" style="cursor:pointer; text-align:right" title="Daily Change %">${i18n('col_change')} ${sortIcon('change')}</th>
                 `;
-                const isAIBased = (CURRENT_TAB === 'ai' || CURRENT_TAB === 'smart-scan');
 
                 if (isAIBased) {
                     headers += `
@@ -1264,6 +1269,17 @@
                         <th onclick="handleSort('rise')" style="cursor:pointer; text-align:right" title="Combined Technical Launch Score">${i18n('col_rise')} ${sortIcon('rise')}</th>
                     `;
                 }
+                thead.innerHTML = `<tr>${headers}</tr>`;
+            }
+
+            function renderTable(data) {
+                const container = document.getElementById('table-container');
+                if (data.length === 0) {
+                    container.innerHTML = `<div class="loading">${i18n('no_results')}</div>`;
+                    return;
+                }
+
+                const isAIBased = (CURRENT_TAB === 'ai' || CURRENT_TAB === 'smart-scan');
 
                 let rows = data.map(item => {
                     const score = item.score || {};
@@ -1284,14 +1300,20 @@
                     let extraCols = '';
                     if (!isAIBased) {
                         extraCols = `
-                            <td style="text-align:right">${(score.trend_score || 0).toFixed(0)}</td>
-                            <td style="text-align:right">${(score.momentum_score || 0).toFixed(0)}</td>
-                            <td style="text-align:right"><span class="badge ${scoreClass}">${totalScore.toFixed(0)}</span></td>
+                            <td style="text-align:right" data-field="trend" data-value="${score.trend_score || 0}">${(score.trend_score || 0).toFixed(0)}</td>
+                            <td style="text-align:right" data-field="momt" data-value="${score.momentum_score || 0}">${(score.momentum_score || 0).toFixed(0)}</td>
+                            <td style="text-align:right" data-field="rise" data-value="${totalScore}"><span class="badge ${scoreClass}">${totalScore.toFixed(0)}</span></td>
                         `;
                     } else {
                         let aiClass = 'var(--text-muted)';
-                        if (ai > 0.3) aiClass = 'var(--success)';
-                        else if (ai > 0.15) aiClass = 'var(--warning)';
+                        let aiBadgeStyle = 'rgba(255,255,255,0.05)';
+                        if (ai > 0.3) {
+                            aiClass = 'var(--success)';
+                            aiBadgeStyle = 'rgba(16, 185, 129, 0.2)'; // Standardized Success
+                        } else if (ai > 0.15) {
+                            aiClass = 'var(--warning)';
+                            aiBadgeStyle = 'rgba(245, 158, 11, 0.2)'; // Standardized Warning
+                        }
 
                         const pct = (ai * 100).toFixed(1) + '%';
                         const targetP = item.ai_target_price || (lastPrice * 1.15);
@@ -1302,20 +1324,20 @@
                         else if (totalScore >= 60) riseColor = 'var(--warning)';
 
                         extraCols = `
-                            <td style="text-align:right; color:var(--success)">$${parseFloat(targetP).toFixed(1)}</td>
+                            <td style="text-align:right; color:var(--success)" data-field="target" data-value="${targetP}">$${parseFloat(targetP).toFixed(1)}</td>
                             <td style="text-align:right; color:var(--danger)">$${parseFloat(stopP).toFixed(1)}</td>
-                            <td style="text-align:right; color:${riseColor}; font-weight:bold;">${totalScore.toFixed(0)}</td>
+                            <td style="text-align:right; color:${riseColor}; font-weight:bold;" data-field="rise" data-value="${totalScore}">${totalScore.toFixed(0)}</td>
                             <td style="text-align:center; color:${aiClass}">${ai > 0.3 ? '🔥' : (ai > 0.15 ? '⚡' : '💤')}</td>
-                            <td style="text-align:right"><span class="badge badge-ai" style="background:${ai > 0.3 ? 'rgba(168, 85, 247, 0.2)' : 'rgba(255,255,255,0.05)'}">${pct}</span></td>
+                            <td style="text-align:right" data-field="ai" data-value="${ai}"><span class="badge badge-ai" style="background:${aiBadgeStyle}; border: 1px solid ${aiClass}">${pct}</span></td>
                         `;
                     }
 
                     return `
                         <tr class="${isSelected}" onclick="openDetail('${item.ticker}')">
-                            <td style="font-weight:bold; color:var(--accent)">${item.ticker}</td>
+                            <td style="font-weight:bold; color:var(--accent)" data-field="ticker" data-value="${item.ticker}">${item.ticker}</td>
                             <td style="color:white; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px;">${item.name || item.ticker}</td>
-                            <td style="text-align:right">${lastPrice.toFixed(2)}</td>
-                            <td style="text-align:right; color:${changeColor}">${changeSign}${changePercent.toFixed(2)}%</td>
+                            <td style="text-align:right" data-field="price" data-value="${lastPrice}">${lastPrice.toFixed(2)}</td>
+                            <td style="text-align:right; color:${changeColor}" data-field="change" data-value="${changePercent}">${changeSign}${changePercent.toFixed(2)}%</td>
                             ${extraCols}
                         </tr>
                     `;
@@ -1323,10 +1345,11 @@
 
                 container.innerHTML = `
                     <table>
-                        <thead><tr>${headers}</tr></thead>
+                        <thead></thead>
                         <tbody>${rows}</tbody>
                     </table>
                 `;
+                renderTableHeaders();
             }
 
             // --- Modal ---
@@ -1491,24 +1514,30 @@
             // --- Search ---
             function handleSearch(q) {
                 const query = q.toLowerCase();
-                if (query.length === 0) {
-                    renderTabFromState_or_Fetch();
-                    return;
-                }
 
-                let data = [];
-                if (CURRENT_TAB === 'smart-scan') data = APP_STATE.smartScan.data;
-                else if (CURRENT_TAB === 'ai') data = APP_STATE.ai.data;
-                else data = APP_STATE.technical.data;
+                // Debounce logic
+                if (searchTimeout) clearTimeout(searchTimeout);
 
-                if (!data) return;
+                searchTimeout = setTimeout(() => {
+                    if (query.length === 0) {
+                        renderTabFromState_or_Fetch();
+                        return;
+                    }
 
-                const filtered = data.filter(item =>
-                    item.ticker.toLowerCase().includes(query) ||
-                    (item.name || '').toLowerCase().includes(query)
-                );
+                    let data = [];
+                    if (CURRENT_TAB === 'smart-scan') data = APP_STATE.smartScan.data;
+                    else if (CURRENT_TAB === 'ai') data = APP_STATE.ai.data;
+                    else data = APP_STATE.technical.data;
 
-                renderTable(filtered);
+                    if (!data) return;
+
+                    const filtered = data.filter(item =>
+                        item.ticker.toLowerCase().includes(query) ||
+                        (item.name || '').toLowerCase().includes(query)
+                    );
+
+                    renderTable(filtered);
+                }, 300);
             }
 
             // --- Sync ---

@@ -135,17 +135,29 @@ def load_indicators_from_db(ticker):
     finally:
         conn.close()
 
-@lru_cache(maxsize=1)
+# Manual TTL Cache for TW Stocks
+_tw_stocks_cache = {
+    "data": None,
+    "last_updated": 0
+}
+
 def get_all_tw_stocks():
-    """Returns a list of all TWSE stock codes. Cached to avoid slow iteration."""
+    """Returns a list of all TWSE stock codes. Caches for 1 hour."""
+    now = time.time()
+    if _tw_stocks_cache["data"] and (now - _tw_stocks_cache["last_updated"] < 3600):
+        return _tw_stocks_cache["data"]
+
     stocks = []
-    # This loop is slow if run every time. Upper layer caches it.
+    # This loop is slow if run every time.
     for code, info in twstock.codes.items():
         if info.type == '股票' and info.market == '上市':
             stocks.append({
                 "code": code,
                 "name": info.name
             })
+    
+    _tw_stocks_cache["data"] = stocks
+    _tw_stocks_cache["last_updated"] = now
     return stocks
 
 def get_stock_name_from_db(ticker: str) -> str:
