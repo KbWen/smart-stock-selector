@@ -45,6 +45,14 @@ We label a "Win" ONLY if:
 * **Feature Normalization**: MACD 與 MACD Hist 皆經過價格標準化 (`Indicator / Price`)。
 * **Class Weighting**: 針對獲利樣本稀缺 (15.58%) 的特性優化。
 
+### Model Version Control
+
+To ensure strategy consistency and reproducibility, the system implements a strict versioning protocol:
+
+* **Version Tagging**: Every trained model is saved with a timestamped tag (e.g., `v4.1.20231027`).
+* **Database Partitioning**: The `stock_scores` table uses a composite primary key `(ticker, model_version)`, allowing multiple model versions to coexist.
+* **User Selection**: The frontend includes a "Version Switcher" that allows traders to toggle between the "Latest" model and historical versions to verify performance stability over time.
+
 ### AI Sniper Strategy Visualization
 
 ```mermaid

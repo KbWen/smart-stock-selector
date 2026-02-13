@@ -5,6 +5,10 @@ from sklearn.model_selection import TimeSeriesSplit
 from sklearn.metrics import classification_report
 import joblib
 import os
+import shutil
+import json
+import glob
+from datetime import datetime
 from core import config
 
 # ===== SNIPER STRATEGY PARAMETERS =====
@@ -135,6 +139,17 @@ def get_model_version():
     """Returns the current model version string."""
     return CURRENT_MODEL_VERSION
 
+def list_available_models():
+    """Returns a list of all trained model versions found in the history log."""
+    history_path = os.path.join(os.path.dirname(MODEL_PATH), "models_history.json")
+    if os.path.exists(history_path):
+        try:
+            with open(history_path, 'r') as f:
+                return json.load(f)
+        except:
+            return []
+    return []
+
 from datetime import datetime
 def train_and_save(all_dfs):
     print("=" * 60)
@@ -263,20 +278,78 @@ def train_and_save(all_dfs):
     except:
         pass
     
-    # --- SAVE WITH METADATA ---
+    # --- SAVE WITH METADATA & VERSIONING ---
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M")
+    version_tag = f"v4.{timestamp}"
+    
     model_metadata = {
-        'version': 'v4.0', # Ensemble V4
+        'version': version_tag,
         'trained_at': datetime.now().isoformat(),
         'ensemble': ensemble_model,
         'features': FEATURE_COLS
     }
     
-    joblib.dump(model_metadata, MODEL_PATH)
-    print(f"\nSniper Ensemble (GB+RF+MLP) saved to {MODEL_PATH}")
+    # 1. Save specific version
+    base_dir = os.path.dirname(MODEL_PATH)
+    filename = os.path.basename(MODEL_PATH)
+    name_part, ext_part = os.path.splitext(filename)
+    
+    versioned_filename = f"{name_part}_{timestamp}{ext_part}"
+    versioned_path = os.path.join(base_dir, versioned_filename)
+    
+    joblib.dump(model_metadata, versioned_path)
+    print(f"\nSaved version: {versioned_path}")
+    
+    # 2. Update "Latest" (Symlink/Copy behavior)
+    shutil.copy(versioned_path, MODEL_PATH)
+    print(f"Updated latest model: {MODEL_PATH}")
+    
+    # 3. Update History Log
+    history_path = os.path.join(base_dir, "models_history.json")
+    history_entry = {
+        "timestamp": timestamp,
+        "version": version_tag,
+        "samples": len(X_all),
+        "win_rates": {
+            "hold": round(win_rate_0, 3),
+            "buy": round(win_rate_1, 3),
+            "strong": round(win_rate_2, 3)
+        }
+    }
+    
+    history = []
+    if os.path.exists(history_path):
+        try:
+            with open(history_path, 'r') as f:
+                history = json.load(f)
+        except:
+            history = []
+            
+    history.append(history_entry)
+    # Keep last 50 logs
+    if len(history) > 50:
+        history = history[-50:]
+        
+    with open(history_path, 'w') as f:
+        json.dump(history, f, indent=2)
+        
+    # 4. Rotation (Keep last 3 files)
+    # Pattern: model_sniper_*.pkl
+    pattern = os.path.join(base_dir, f"{name_part}_*{ext_part}")
+    files = sorted(glob.glob(pattern))
+    
+    # Keep last 3
+    if len(files) > 3:
+        for f in files[:-3]:
+            try:
+                os.remove(f)
+                print(f"Rotated (deleted) old model: {f}")
+            except Exception as e:
+                print(f"Error rotating {f}: {e}")
     
     # Update global version
     global CURRENT_MODEL_VERSION
-    CURRENT_MODEL_VERSION = 'v4.0'
+    CURRENT_MODEL_VERSION = version_tag
     print("=" * 60)
 
 

@@ -36,6 +36,7 @@ from core.analysis import (
 from core.features import compute_all_indicators
 from core.ai import predict_prob, get_model_version
 from core.alerts import check_smart_conditions
+from core.market import get_market_status
 from backend.backtest import run_time_machine
 
 from fastapi.responses import FileResponse, JSONResponse
@@ -199,9 +200,21 @@ def search_stocks(q: Optional[str] = None):
     ]
     return filtered[:20]
 
+@app.get("/api/models")
+def get_model_history_list():
+    """Returns list of available trained model versions."""
+    from core.ai import list_available_models
+    return list_available_models()
+
+@app.get("/api/search")
+def search_stocks_global_api(q: str = Query(..., min_length=1)):
+    """Universal search for any stock ticker or name."""
+    from core.data import search_stocks_global
+    return search_stocks_global(q)
+
 @app.get("/api/top_picks")
-def get_top_picks(sort: str = "score"):
-    picks = get_top_scores_from_db(limit=50, sort_by=sort)
+def get_top_picks(sort: str = "score", version: Optional[str] = None):
+    picks = get_top_scores_from_db(limit=50, sort_by=sort, version=version)
     
     if picks:
         all_stocks_list = get_all_tw_stocks()
@@ -292,6 +305,22 @@ def run_backtest_simulation(days: int = 30):
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/market_status")
+def market_status():
+    """
+    Returns market-wide risk metrics (Bull/Bear Ratio, Temp, Sentiment) + History.
+    """
+    from core.market import save_market_history, get_market_history
+    status = get_market_status()
+    status["model_version"] = get_model_version()
+    
+    # Save snapshot to history
+    if status.get("bull_ratio") is not None:
+        save_market_history(status)
+        
+    status["history"] = get_market_history()
+    return status
 
 @app.post("/api/smart_scan")
 def smart_scan(criteria: List[str] = []):

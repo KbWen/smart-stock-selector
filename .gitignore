@@ -9,6 +9,9 @@ env/
 storage.db
 model.pkl
 model_sniper.pkl
+model_sniper_*.pkl
+market_history.json
+models_history.json
 
 # IDEs
 .vscode/

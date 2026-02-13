@@ -135,6 +135,15 @@ python backend/main.py
 
 👉 **[查看完整資料字典 (Data Dictionary)](docs/DATA_DICTIONARY.md)**：包含資料庫定義、技術指標公式與 API 規格。
 
+## 🔄 版本更新日誌 (Release Notes)
+
+### v2.1.0 - The "Market Pulse" Update (2026-02-13)
+
+* **API 全局搜尋**: 支援搜尋整個台股資料庫 (1000+ 檔)，不再受限於本地排名列表。
+* **AI 模型版本控管**: 新增 `Model Version Switcher`，可自由切換不同訓練版本的 AI 模型並查看對應排名。
+* **大盤動態圖表**: "Market Pulse" 分頁新增 30 日市場溫度與 AI 情緒趨勢圖，視覺化呈現多空力道變化。
+* **回測互動優化**: 時光機回測結果現在可直接點擊，查看當時的個股詳細分析。
+
 ## 📜 授權條款
 
 MIT License

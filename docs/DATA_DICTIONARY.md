@@ -30,7 +30,7 @@ Stores the latest analysis scores, AI predictions, and strategy signals.
 | `last_price` | REAL | Latest closing price |
 | `change_percent` | REAL | Daily percentage change |
 | `ai_probability` | REAL | Ensemble AI Win Probability (0.0 - 1.0) |
-| `model_version` | TEXT | Version of the model used for prediction |
+| `model_version` | TEXT (PK) | Version of the model used (Part of Composite PK) |
 | `updated_at` | TIMESTAMP | Last calculation timestamp |
 
 ### Table: `stock_indicators` (Cached Features)

@@ -37,7 +37,7 @@ def init_db():
     # Create scores table for fast ranking
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS stock_scores (
-            ticker TEXT PRIMARY KEY,
+            ticker TEXT,
             total_score REAL,
             trend_score REAL,
             momentum_score REAL,
@@ -46,7 +46,8 @@ def init_db():
             change_percent REAL,
             ai_probability REAL,
             model_version TEXT,
-            updated_at TIMESTAMP
+            updated_at TIMESTAMP,
+            PRIMARY KEY (ticker, model_version)
         )
     ''')
     
@@ -273,18 +274,27 @@ def save_score_to_db(ticker, score_data, ai_prob=None, model_version=None):
     conn.commit()
     conn.close()
 
-def get_top_scores_from_db(limit=50, sort_by='score'):
+def get_top_scores_from_db(limit=50, sort_by='score', version=None):
     conn = get_db_connection()
     
     order_clause = "total_score DESC"
     if sort_by == 'ai':
         order_clause = "ai_probability DESC"
         
-    df = pd.read_sql(f'''
-        SELECT *, updated_at as last_sync FROM stock_scores 
-        ORDER BY {order_clause}
-        LIMIT ?
-    ''', conn, params=(limit,))
+    query = f"SELECT *, updated_at as last_sync FROM stock_scores"
+    params = [limit]
+    
+    if version:
+        query += " WHERE model_version = ?"
+        params = [version, limit]
+    else:
+        # Default to latest version in the table if not specified
+        query += " WHERE model_version = (SELECT model_version FROM stock_scores ORDER BY updated_at DESC LIMIT 1)"
+        params = [limit]
+
+    query += f" ORDER BY {order_clause} LIMIT ?"
+    
+    df = pd.read_sql(query, conn, params=params)
     conn.close()
     
     # Robust NaN/NaT handling for JSON
@@ -294,5 +304,30 @@ def get_top_scores_from_db(limit=50, sort_by='score'):
             if pd.isna(v):
                 r[k] = None
     return records
+
+def search_stocks_global(query: str):
+    """
+    Searches for any stock in the database or twstock list by ticker or name.
+    """
+    q = f"%{query.upper()}%"
+    conn = get_db_connection()
+    # Search in historical data or scores to see if we have ANY info
+    sql = """
+        SELECT DISTINCT ticker FROM stock_history 
+        WHERE ticker LIKE ? 
+        UNION 
+        SELECT ticker FROM stock_scores 
+        WHERE ticker LIKE ? OR ticker LIKE ?
+        LIMIT 10
+    """
+    try:
+        tickers = [row['ticker'] for row in conn.execute(sql, (q, q, q)).fetchall()]
+        results = []
+        for t in tickers:
+            name = get_stock_name_from_db(t)
+            results.append({"ticker": t, "name": name or t})
+        return results
+    finally:
+        conn.close()
 
 init_db()
