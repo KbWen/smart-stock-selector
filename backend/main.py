@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 import threading
 import time
 from typing import Optional, List
+from concurrent.futures import ThreadPoolExecutor
 
 # Add parent directory to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -18,10 +19,9 @@ from core.data import (
     save_indicators_to_db, load_indicators_from_db, load_from_db
 )
 from core.analysis import (
-    calculate_rise_score, calculate_rsi, calculate_macd, 
-    calculate_smas, calculate_kd, calculate_bollinger, calculate_atr,
-    generate_analysis_report
+    calculate_rise_score, generate_analysis_report
 )
+from core.features import compute_all_indicators
 from core.ai import predict_prob, get_model_version
 from core.alerts import check_smart_conditions
 from backend.backtest import run_time_machine
@@ -63,16 +63,6 @@ def get_cached_stocks():
             if not STOCK_LIST_CACHE: return []
     return STOCK_LIST_CACHE
 
-def compute_all_indicators(df):
-    """Compute ALL indicators needed for both Score and AI."""
-    df['rsi'] = calculate_rsi(df)
-    df['macd'], df['macd_signal'] = calculate_macd(df)
-    df = calculate_smas(df)
-    df = calculate_kd(df)
-    df = calculate_bollinger(df)
-    df['atr'] = calculate_atr(df)
-    return df
-
 # -- Global State for Sync Progress --
 sync_status = {
     "is_syncing": False,
@@ -81,9 +71,6 @@ sync_status = {
     "current_ticker": "",
     "last_updated": None
 }
-
-from concurrent.futures import ThreadPoolExecutor
-from core.data import save_indicators_to_db, load_indicators_from_db
 
 def run_sync_task():
     global sync_status
@@ -127,6 +114,9 @@ def run_sync_task():
                     sync_status["current"] += 1
                 return
             
+            # Retry logic handled inside fetch_stock_data ideally, 
+            # but we can add simple retry here if needed. 
+            # For now, relying on core.data improvements.
             df = fetch_stock_data(ticker, days=200, force_download=True)
             if not df.empty and len(df) >= 60:
                 df = compute_all_indicators(df)

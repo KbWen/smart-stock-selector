@@ -75,6 +75,15 @@
             gap: 6px;
         }
 
+        tr:hover {
+            background-color: rgba(255, 255, 255, 0.05);
+        }
+
+        tr.selected-row {
+            background-color: rgba(69, 183, 209, 0.15);
+            border-left: 3px solid var(--accent);
+        }
+
         .btn:hover {
             background-color: #273548;
             transform: translateY(-1px);
@@ -911,7 +920,7 @@
                         html += `
                         <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
                             <td>
-                                <span style="font-weight:bold; color:var(--text-main)">${p.ticker}</span> 
+                                <span style="font-weight:bold; color:var(--accent)">${p.ticker}</span> 
                                 ${p.name && p.name !== p.ticker ? `<span style="color:var(--text-muted); font-size:0.9em">${p.name}</span>` : ''}
                             </td>
                             <td>$${p.entry_price.toFixed(1)}</td>
@@ -957,86 +966,105 @@
 
                 // Headers
                 let headers = `
-                <th>Ticker</th>
-                <th>Name</th>
-                <th>Price</th>
-                <th>Change</th>
-            `;
-                if (CURRENT_TAB === 'ai') {
-                    headers += `
-                    <th><i class="fas fa-bullseye"></i> Target</th>
-                    <th><i class="fas fa-hand-paper"></i> Stop</th>
-                    <th><i class="fas fa-ruler-combined"></i> Rise Score</th>
-                    <th><i class="fas fa-signal"></i> Signal</th>
-                    <th><i class="fas fa-brain"></i> AI Prob</th>
+                    <th>Ticker</th>
+                    <th style="min-width: 100px;">Name</th>
+                    <th style="text-align:right">Price</th>
+                    <th style="text-align:right">Change</th>
                 `;
+                const isAIBased = (CURRENT_TAB === 'ai' || CURRENT_TAB === 'smart-scan');
+
+                if (isAIBased) {
+                    headers += `
+                        <th style="text-align:right"><i class="fas fa-bullseye"></i> Target</th>
+                        <th style="text-align:right"><i class="fas fa-hand-paper"></i> Stop</th>
+                        <th style="text-align:right"><i class="fas fa-ruler-combined"></i> Rise</th>
+                        <th style="text-align:center"><i class="fas fa-signal"></i> Signal</th>
+                        <th style="text-align:right"><i class="fas fa-brain"></i> AI Prob</th>
+                    `;
                 } else {
-                    headers += `<th>Trend</th><th>Momentum</th><th style="text-align:right">Rise Score</th>`;
+                    headers += `
+                        <th style="text-align:right">Trend</th>
+                        <th style="text-align:right">Momt</th>
+                        <th style="text-align:right">Score</th>
+                    `;
                 }
 
                 let rows = data.map(item => {
-                    const score = item.score;
+                    const score = item.score || {};
                     const ai = item.ai_probability || 0;
+                    const lastPrice = score.last_price || item.price || 0;
+                    const isSelected = item.ticker === SELECTED_TICKER ? 'selected-row' : '';
 
                     // Color logic
                     let scoreClass = 'badge-score-low';
-                    if (score.total_score >= 80) scoreClass = 'badge-score-high';
-                    else if (score.total_score >= 60) scoreClass = 'badge-score-mid';
+                    const totalScore = score.total_score || 0;
+                    if (totalScore >= 80) scoreClass = 'badge-score-high';
+                    else if (totalScore >= 60) scoreClass = 'badge-score-mid';
 
-                    const changeColor = score.change_percent >= 0 ? 'var(--success)' : 'var(--danger)';
-                    const changeSign = score.change_percent >= 0 ? '+' : '';
+                    const changePercent = score.change_percent || 0;
+                    const changeColor = changePercent >= 0 ? 'var(--success)' : 'var(--danger)';
+                    const changeSign = changePercent >= 0 ? '+' : '';
 
                     let extraCols = '';
-                    if (CURRENT_TAB === 'technical') {
+                    if (!isAIBased) {
                         extraCols = `
-                        <td>${score.trend_score.toFixed(0)}</td>
-                        <td>${score.momentum_score.toFixed(0)}</td>
-                        <td style="text-align:right"><span class="badge ${scoreClass}">${score.total_score.toFixed(0)}</span></td>
-                    `;
+                            <td style="text-align:right">${(score.trend_score || 0).toFixed(0)}</td>
+                            <td style="text-align:right">${(score.momentum_score || 0).toFixed(0)}</td>
+                            <td style="text-align:right"><span class="badge ${scoreClass}">${totalScore.toFixed(0)}</span></td>
+                        `;
                     } else {
                         let aiClass = 'var(--text-muted)';
                         if (ai > 0.3) aiClass = 'var(--success)';
                         else if (ai > 0.15) aiClass = 'var(--warning)';
 
                         const pct = (ai * 100).toFixed(1) + '%';
-                        const targetP = item.ai_target_price || (score.last_price * 1.15).toFixed(2);
-                        const stopP = item.ai_stop_price || (score.last_price * 0.95).toFixed(2);
-                        // Rise Score Logic (Color scaling)
-                        const riseScore = score.total_score || 0;
+                        const targetP = item.ai_target_price || (lastPrice * 1.15);
+                        const stopP = item.ai_stop_price || (lastPrice * 0.95);
+
                         let riseColor = 'var(--text-muted)';
-                        if (riseScore >= 80) riseColor = 'var(--success)';
-                        else if (riseScore >= 60) riseColor = 'var(--warning)';
+                        if (totalScore >= 80) riseColor = 'var(--success)';
+                        else if (totalScore >= 60) riseColor = 'var(--warning)';
 
                         extraCols = `
-                        <td style="color:var(--success)">$${parseFloat(targetP).toFixed(1)}</td>
-                        <td style="color:var(--danger)">$${parseFloat(stopP).toFixed(1)}</td>
-                        <td style="color:${riseColor}; font-weight:bold;">${riseScore}</td>
-                        <td style="color:${aiClass}">${ai > 0.3 ? '🔥 High' : (ai > 0.15 ? '⚡ Med' : '💤 Low')}</td>
-                        <td style="text-align:right"><span class="badge badge-ai">${pct}</span></td>
-                    `;
+                            <td style="text-align:right; color:var(--success)">$${parseFloat(targetP).toFixed(1)}</td>
+                            <td style="text-align:right; color:var(--danger)">$${parseFloat(stopP).toFixed(1)}</td>
+                            <td style="text-align:right; color:${riseColor}; font-weight:bold;">${totalScore.toFixed(0)}</td>
+                            <td style="text-align:center; color:${aiClass}">${ai > 0.3 ? '🔥' : (ai > 0.15 ? '⚡' : '💤')}</td>
+                            <td style="text-align:right"><span class="badge badge-ai" style="background:${ai > 0.3 ? 'rgba(168, 85, 247, 0.2)' : 'rgba(255,255,255,0.05)'}">${pct}</span></td>
+                        `;
                     }
 
                     return `
-                    <tr onclick="openDetail('${item.ticker}')">
-                        <td style="font-weight:bold; color:var(--accent)">${item.ticker}</td>
-                        <td style="color:white">${item.name}</td>
-                        <td>${score.last_price.toFixed(2)}</td>
-                        <td style="color:${changeColor}">${changeSign}${score.change_percent.toFixed(2)}%</td>
-                        ${extraCols}
-                    </tr>
-                `;
+                        <tr class="${isSelected}" onclick="openDetail('${item.ticker}')">
+                            <td style="font-weight:bold; color:var(--accent)">${item.ticker}</td>
+                            <td style="color:white; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px;">${item.name || item.ticker}</td>
+                            <td style="text-align:right">${lastPrice.toFixed(2)}</td>
+                            <td style="text-align:right; color:${changeColor}">${changeSign}${changePercent.toFixed(2)}%</td>
+                            ${extraCols}
+                        </tr>
+                    `;
                 }).join('');
 
                 container.innerHTML = `
-                <table>
-                    <thead><tr>${headers}</tr></thead>
-                    <tbody>${rows}</tbody>
-                </table>
-            `;
+                    <table>
+                        <thead><tr>${headers}</tr></thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                `;
             }
 
             // --- Modal ---
             async function openDetail(ticker) {
+                SELECTED_TICKER = ticker; // Set selected
+                // Re-render table to update selection highlight (optional: strictly usually better to just update class, but re-render is cheap here)
+                // Actually, let's just update the class for performance and smoothness
+                document.querySelectorAll('tr').forEach(tr => tr.classList.remove('selected-row'));
+                // Find row and add class? Hard without ID. Re-render is safer for state consistency if data hasn't changed.
+                // Ideally we just update the specific row style, but for now let's rely on the variable.
+                // To see the highlight immediately without reload:
+                // We can't easily find the row without an ID.
+                // Let's just persist it for next render.
+
                 const modal = document.getElementById('detailsModal');
                 document.getElementById('searchResults').style.display = 'none';
                 document.getElementById('searchInput').value = '';

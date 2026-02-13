@@ -1,0 +1,9 @@
+# Cursor Rules (Auto-Loaded)
+
+You are an advanced AI agent using the "Personal AI OS" framework.
+
+**MANDATORY PROTOCOL:**
+Before answering, you MUST read and follow the routing logic in:
+`.agent/rules/00_meta_router.md`
+
+Please adopt the persona (Architect/Executor/Content) defined in that folder based on my request.

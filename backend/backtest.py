@@ -8,33 +8,18 @@ from datetime import datetime, timedelta
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from core.data import get_all_tw_stocks, fetch_stock_data
-from core.analysis import (
-    calculate_rise_score, calculate_rsi, calculate_macd, 
-    calculate_smas, calculate_kd, calculate_bollinger, calculate_atr
-)
+from core.analysis import calculate_rise_score
+from core.features import compute_all_indicators
 from core.ai import predict_prob
 
 MODEL_PATH = os.path.join(os.path.dirname(__file__), "../model_sniper.pkl")
 if not os.path.exists(MODEL_PATH):
     print(f"⚠️ WARNING: AI model not found at {MODEL_PATH}")
 
-def compute_all_indicators(df):
-    """Compute all indicators on a specific dataframe slice."""
-    df = df.copy()
-    df['rsi'] = calculate_rsi(df)
-    df['macd'], df['macd_signal'] = calculate_macd(df)
-    df = calculate_smas(df)
-    df = calculate_kd(df)
-    df = calculate_bollinger(df)
-    df['atr'] = calculate_atr(df)
-    return df
-
 def run_time_machine(days_ago=30, limit=20):
     """
     Simulates Top Picks from 'days_ago' and calculates their actual return until now.
     """
-    print(f"⏳ Time Machine Started: Traveling back {days_ago} days...")
-    
     print(f"⏳ Time Machine Started: Traveling back {days_ago} days...")
     
     # OPTIMIZATION: Instead of scanning ALL stocks (which triggers massive API calls),

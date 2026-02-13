@@ -182,9 +182,13 @@ def save_to_db(ticker, df):
 
 def load_from_db(ticker: str, days: int = 365) -> pd.DataFrame:
     conn = get_db_connection()
-    query = 'SELECT * FROM stock_history WHERE ticker = ? ORDER BY date ASC'
+    
+    # Optimization: Filter by date to avoid loading full history
+    start_date = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
+    query = 'SELECT * FROM stock_history WHERE ticker = ? AND date >= ? ORDER BY date ASC'
+    
     try:
-        df = pd.read_sql(query, conn, params=(ticker,))
+        df = pd.read_sql(query, conn, params=(ticker, start_date))
         if not df.empty:
             df['date'] = pd.to_datetime(df['date'])
         return df
@@ -199,32 +203,41 @@ def fetch_stock_data(ticker: str, days: int = 365, force_download: bool = False)
         df = load_from_db(ticker, days)
         if not df.empty:
             last_date = df.iloc[-1]['date']
-            if datetime.now() - last_date < timedelta(days=1):
+            # If data is fresh (updated today or yesterday), return it
+            if datetime.now() - last_date < timedelta(hours=18): 
                 return df
 
-    # 2. Fetch from YFinance
+    # 2. Fetch from YFinance with Retry Logic (Exponential Backoff)
     yf_ticker = ticker
     if not ticker.endswith('.TW'):
         yf_ticker = f"{ticker}.TW"
     
-    try:
-        stock = yf.Ticker(yf_ticker)
-        df = stock.history(period=f"{days}d")
-        
-        if df.empty:
-            yf_ticker = f"{ticker}.TWO"
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
             stock = yf.Ticker(yf_ticker)
             df = stock.history(period=f"{days}d")
             
-        if not df.empty:
-            df = df.reset_index()
-            df.columns = [c.lower() for c in df.columns]
-            save_to_db(ticker, df)
+            if df.empty:
+                # Try .TWO if .TW failed (First attempt only to switch suffix)
+                if attempt == 0: 
+                    yf_ticker = f"{ticker}.TWO"
+                    stock = yf.Ticker(yf_ticker)
+                    df = stock.history(period=f"{days}d")
+                
+            if not df.empty:
+                df = df.reset_index()
+                df.columns = [c.lower() for c in df.columns]
+                save_to_db(ticker, df)
+                return df
+                
+        except Exception as e:
+            wait_time = (2 ** attempt)  # 1s, 2s, 4s
+            print(f"Fetch Error {ticker} (Attempt {attempt+1}/{max_retries}): {e}. Retrying in {wait_time}s...")
+            time.sleep(wait_time)
             
-        return df
-    except Exception as e:
-        print(f"Fetch Error {ticker}: {e}")
-        return pd.DataFrame()
+    print(f"Failed to fetch {ticker} after {max_retries} attempts.")
+    return pd.DataFrame()
 
 def save_score_to_db(ticker, score_data, ai_prob=None, model_version=None):
     conn = get_db_connection()

@@ -27,6 +27,11 @@ def calculate_smas(data: pd.DataFrame) -> pd.DataFrame:
     data['sma_60'] = data['close'].rolling(window=60).mean()
     return data
 
+def calculate_emas(data: pd.DataFrame) -> pd.DataFrame:
+    data['ema_20'] = data['close'].ewm(span=20, adjust=False).mean()
+    data['ema_50'] = data['close'].ewm(span=50, adjust=False).mean()
+    return data
+
 def calculate_kd(data: pd.DataFrame, period: int = 9) -> pd.DataFrame:
     low_min = data['low'].rolling(window=period).min()
     high_max = data['high'].rolling(window=period).max()
@@ -181,9 +186,14 @@ def generate_analysis_report(last_row, prev_row, trend_score, momentum_score, vo
         
     # 3. Setup/Volatility
     bb_width = last_row.get('bb_width', 1.0)
+    
+    # Safe get for vol_ma20 (features.py ensures it, but safe fallback)
+    vol_ma20 = last_row.get('vol_ma20')
+    current_vol = last_row['volume']
+    
     if bb_width < 0.10:
         report['setup'] = "Volatility Squeeze! Big move imminent."
-    elif last_row['volume'] > last_row.get('vol_ma20', 1) * 2:
+    elif vol_ma20 and current_vol > vol_ma20 * 2:
         report['setup'] = "High Volume Event Detected."
     else:
         report['setup'] = "Normal market activity."

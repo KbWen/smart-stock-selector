@@ -133,6 +133,8 @@ python backend/main.py
 * `frontend/`: 響應式儀表板前端檔案。
 * `storage.db`: 本地 SQLite 資料庫 (自動生成)。
 
+👉 **[查看完整資料字典 (Data Dictionary)](docs/DATA_DICTIONARY.md)**：包含資料庫定義、技術指標公式與 API 規格。
+
 ## 📜 授權條款
 
 MIT License

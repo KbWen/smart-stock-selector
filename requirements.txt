@@ -1,10 +1,9 @@
 fastapi
-uvicorn
+uvicorn[standard]
 pandas
 numpy
 yfinance
 twstock
-tensorflow
 scikit-learn
 joblib
 matplotlib

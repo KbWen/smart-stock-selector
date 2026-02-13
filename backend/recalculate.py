@@ -8,21 +8,10 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from core.data import get_db_connection, save_score_to_db, load_from_db
 from core.analysis import (
-    calculate_rise_score, calculate_rsi, calculate_macd, 
-    calculate_smas, calculate_kd, calculate_bollinger, calculate_atr,
-    generate_analysis_report
+    calculate_rise_score, generate_analysis_report
 )
+from core.features import compute_all_indicators
 from core.ai import predict_prob, get_model_version
-
-def compute_all_indicators(df):
-    """Compute ALL indicators needed for both Score and AI."""
-    df['rsi'] = calculate_rsi(df)
-    df['macd'], df['macd_signal'] = calculate_macd(df)
-    df = calculate_smas(df)
-    df = calculate_kd(df)
-    df = calculate_bollinger(df)
-    df['atr'] = calculate_atr(df)
-    return df
 
 def recalculate_all():
     print("=" * 60)

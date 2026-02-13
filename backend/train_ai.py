@@ -6,21 +6,8 @@ import pandas as pd
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from core.data import get_db_connection, load_from_db
-from core.analysis import (
-    calculate_rsi, calculate_macd, calculate_smas,
-    calculate_kd, calculate_bollinger, calculate_atr
-)
+from core.features import compute_all_indicators
 from core.ai import train_and_save
-
-def compute_all_indicators(df):
-    """Compute ALL indicators needed for AI training."""
-    df['rsi'] = calculate_rsi(df)
-    df['macd'], df['macd_signal'] = calculate_macd(df)
-    df = calculate_smas(df)
-    df = calculate_kd(df)
-    df = calculate_bollinger(df)
-    df['atr'] = calculate_atr(df)
-    return df
 
 def main():
     print("Loading stock data for AI training...")
