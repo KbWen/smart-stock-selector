@@ -43,8 +43,25 @@ def init_db():
         )
     ''')
     
+    # Create indicators table for caching computation results
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS stock_indicators (
+            ticker TEXT PRIMARY KEY,
+            rsi REAL,
+            macd REAL,
+            macd_signal REAL,
+            ema_20 REAL,
+            ema_50 REAL,
+            sma_20 REAL,
+            sma_60 REAL,
+            k_val REAL,
+            d_val REAL,
+            atr REAL,
+            updated_at TIMESTAMP
+        )
+    ''')
+    
     # Migration: Check if ai_probability exists, if not add it
-    # Simple check: try selecting it, if fail, alter table
     try:
         cursor.execute("SELECT ai_probability FROM stock_scores LIMIT 1")
     except sqlite3.OperationalError:
@@ -53,6 +70,44 @@ def init_db():
         
     conn.commit()
     conn.close()
+
+def save_indicators_to_db(ticker, df):
+    """Saves the last row of indicators to DB for fast scanning."""
+    if df.empty: return
+    last = df.iloc[-1]
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute('''
+            INSERT OR REPLACE INTO stock_indicators (
+                ticker, rsi, macd, macd_signal, ema_20, ema_50, sma_20, sma_60, k_val, d_val, atr, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            ticker, 
+            last.get('rsi'), last.get('macd'), last.get('macd_signal'),
+            last.get('ema_20'), last.get('ema_50'),
+            last.get('sma_20'), last.get('sma_60'),
+            last.get('k'), last.get('d'), # KD columns are 'k' and 'd'
+            last.get('atr'),
+            datetime.now()
+        ))
+        conn.commit()
+    except Exception as e:
+        print(f"Error saving indicators for {ticker}: {e}")
+    finally:
+        conn.close()
+
+def load_indicators_from_db(ticker):
+    """Loads cached indicators for a specific ticker."""
+    conn = get_db_connection()
+    query = 'SELECT * FROM stock_indicators WHERE ticker = ?'
+    try:
+        df = pd.read_sql(query, conn, params=(ticker,))
+        return df.to_dict('records')[0] if not df.empty else None
+    except Exception:
+        return None
+    finally:
+        conn.close()
 
 def get_all_tw_stocks():
     """Returns a list of all TWSE stock codes."""

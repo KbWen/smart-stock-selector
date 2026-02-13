@@ -62,90 +62,91 @@ def calculate_atr(data: pd.DataFrame, window: int = 14) -> pd.Series:
     
     return true_range.rolling(window=window).mean()
 
+def add_rise_scores_to_df(data: pd.DataFrame) -> pd.DataFrame:
+    """
+    Vectorized version of the Rise Score logic.
+    Adds 'trend_score', 'momentum_score', 'volatility_score', and 'total_score' to the DataFrame.
+    """
+    if data.empty or len(data) < 60:
+        for col in ['trend_score', 'momentum_score', 'volatility_score', 'total_score']:
+            data[col] = 0.0
+        return data
+        
+    df = data.copy()
+    
+    # 1. Trend (40%)
+    trend = pd.Series(0.0, index=df.index)
+    # Price > SMA20 > SMA60
+    cond1 = (df['close'] > df['sma_20']) & (df['sma_20'] > df['sma_60'])
+    trend = np.where(cond1, trend + 40, trend)
+    # Price > SMA20 only
+    cond2 = (df['close'] > df['sma_20']) & ~cond1
+    trend = np.where(cond2, trend + 20, trend)
+    
+    # SMA60 Slope (捕捉趨勢力度) - 5 day pct change
+    sma60_slope = df['sma_60'].pct_change(5) * 100
+    trend = np.where(sma60_slope > 0, trend + 10, trend)
+    df['trend_score'] = trend.clip(0, 40)
+
+    # 2. Momentum (30%)
+    momentum = pd.Series(0.0, index=df.index)
+    rsi = df['rsi'].fillna(50)
+    momentum = np.where((rsi >= 55) & (rsi <= 75), momentum + 15, momentum)
+    momentum = np.where(rsi > 80, momentum - 10, momentum)
+    
+    # MACD Bullish
+    macd_bull = (df['macd'] > df['macd_signal']) & (df['macd'] > 0)
+    momentum = np.where(macd_bull, momentum + 10, momentum)
+    
+    # KD Cross (Simplified version for vectorization)
+    kd_bull = (df['k'] > df['d']) & (df['k'] < 80)
+    # Check for actual cross by comparing with shifted row
+    kd_prev_bull = (df['k'].shift(1) < df['d'].shift(1))
+    momentum = np.where(kd_bull & kd_prev_bull, momentum + 15, np.where(kd_bull, momentum + 5, momentum))
+    
+    df['momentum_score'] = momentum.clip(0, 30)
+
+    # 3. Volatility / Setup (30%)
+    volatility = pd.Series(0.0, index=df.index)
+    
+    # Volume explosion
+    vol_ma20 = df['volume'].rolling(window=20).mean()
+    volatility = np.where(df['volume'] > vol_ma20 * 1.5, volatility + 15, 
+                          np.where(df['volume'] > vol_ma20, volatility + 5, volatility))
+                          
+    # Bollinger Squeeze
+    volatility = np.where(df['bb_width'] < 0.10, volatility + 10, volatility)
+    
+    # Bollinger Support
+    bb_support = (df['bb_percent'] > 0) & (df['bb_percent'] < 0.2) & (df['close'] > df['open'])
+    volatility = np.where(bb_support, volatility + 10, volatility)
+    
+    df['volatility_score'] = volatility.clip(0, 30)
+    
+    df['total_score'] = df['trend_score'] + df['momentum_score'] + df['volatility_score']
+    
+    return df
+
 def calculate_rise_score(data: pd.DataFrame) -> dict:
     if data.empty or len(data) < 60:
         return {'total_score': 0, 'trend_score': 0, 'momentum_score': 0, 'volatility_score': 0, 'last_price': 0, 'change_percent': 0}
 
-    last_row = data.iloc[-1]
-    prev_row = data.iloc[-2]
-    
-    # --- 1. Trend (40%) ---
-    trend_score = 0
-    # Price > SMA20 > SMA60 (Perfect Alignment)
-    if last_row['close'] > last_row['sma_20'] > last_row['sma_60']:
-        trend_score += 40
-    elif last_row['close'] > last_row['sma_20']:
-        trend_score += 20
-        
-    # SMA60 Slope (捕捉趨勢力度)
-    sma60_slope = (data['sma_60'].iloc[-1] - data['sma_60'].iloc[-5]) / data['sma_60'].iloc[-5] * 100
-    if sma60_slope > 0:
-        trend_score += 10
-        
-    trend_score = min(40, trend_score)
-
-    # --- 2. Momentum (30%) ---
-    momentum_score = 0
-    rsi = last_row.get('rsi', 50)
-    if 55 <= rsi <= 75:
-        momentum_score += 15
-    elif rsi > 80: # 超買懲罰
-        momentum_score -= 10
-        
-    # MACD 黃金交叉
-    macd = last_row.get('macd', 0)
-    signal = last_row.get('macd_signal', 0)
-    if macd > signal and macd > 0:
-        momentum_score += 10
-        
-    # KD 黃金交叉
-    k = last_row.get('k', 50)
-    d = last_row.get('d', 50)
-    prev_k = prev_row.get('k', 50)
-    prev_d = prev_row.get('d', 50)
-    
-    if prev_k < prev_d and k > d and k < 80:
-        momentum_score += 15
-    elif k > d and k < 80:
-        momentum_score += 5
-        
-    momentum_score = min(30, max(0, momentum_score))
-
-    # --- 3. Volatility / Setup (30%) ---
-    volatility_score = 0
-    
-    # 成交量爆發
-    vol_ma20 = data['volume'].rolling(window=20).mean().iloc[-1]
-    if vol_ma20 > 0 and last_row['volume'] > vol_ma20 * 1.5:
-        volatility_score += 15
-    elif last_row['volume'] > vol_ma20:
-        volatility_score += 5
-        
-    # 布林縮口 (Squeeze)
-    bb_width = last_row.get('bb_width', 1.0)
-    if bb_width < 0.10:
-        volatility_score += 10
-        
-    # 布林下軌支撐
-    bb_pct = last_row.get('bb_percent', 0.5)
-    if 0 < bb_pct < 0.2 and last_row['close'] > last_row['open']:
-        volatility_score += 10
-
-    volatility_score = min(30, volatility_score)
-
-    total_score = trend_score + momentum_score + volatility_score
+    # Use vectorized version to ensure consistency
+    df_scored = add_rise_scores_to_df(data)
+    last_row = df_scored.iloc[-1]
+    prev_row = df_scored.iloc[-2]
     
     change = 0
-    if len(data) >= 2:
+    if len(df_scored) >= 2:
         change = ((last_row['close'] - prev_row['close']) / prev_row['close']) * 100
 
     return {
-        'total_score': total_score,
-        'trend_score': trend_score,
-        'momentum_score': momentum_score,
-        'volatility_score': volatility_score,
-        'last_price': last_row['close'],
-        'change_percent': change,
+        'total_score': float(last_row['total_score']),
+        'trend_score': float(last_row['trend_score']),
+        'momentum_score': float(last_row['momentum_score']),
+        'volatility_score': float(last_row['volatility_score']),
+        'last_price': float(last_row['close']),
+        'change_percent': float(change),
         'name': data.get('name', '')
     }
 

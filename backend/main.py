@@ -4,20 +4,27 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import sys
 import os
-import asyncio
+from datetime import datetime, timedelta
+import threading
 import time
 from typing import Optional, List
 
 # Add parent directory to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from core.data import fetch_stock_data, get_all_tw_stocks, save_score_to_db, get_top_scores_from_db, get_db_connection
+from core.data import (
+    fetch_stock_data, get_all_tw_stocks, save_score_to_db, 
+    get_top_scores_from_db, get_db_connection,
+    save_indicators_to_db, load_indicators_from_db, load_from_db
+)
 from core.analysis import (
     calculate_rise_score, calculate_rsi, calculate_macd, 
     calculate_smas, calculate_kd, calculate_bollinger, calculate_atr,
     generate_analysis_report
 )
 from core.ai import predict_prob
+from core.alerts import check_smart_conditions
+from backend.backtest import run_time_machine
 
 from fastapi.responses import FileResponse
 
@@ -71,8 +78,12 @@ sync_status = {
     "is_syncing": False,
     "total": 0,
     "current": 0,
+    "current_ticker": "",
     "last_updated": None
 }
+
+from concurrent.futures import ThreadPoolExecutor
+from core.data import save_indicators_to_db, load_indicators_from_db
 
 def run_sync_task():
     global sync_status
@@ -81,18 +92,57 @@ def run_sync_task():
     sync_status["total"] = len(all_stocks)
     sync_status["current"] = 0
     
-    for stock in all_stocks:
+    sync_lock = threading.Lock()
+
+    def process_stock(stock):
         ticker = stock["code"]
+        name = stock["name"]
+        
+        with sync_lock:
+            sync_status["current_ticker"] = f"{ticker} {name}"
+            
         try:
+            # Smart Skip: Check if indicators were updated in the last 6 hours
+            cached = load_indicators_from_db(ticker)
+            if cached:
+                # SQLite TIMESTAMP might come back as string
+                if isinstance(cached['updated_at'], str):
+                    try:
+                        updated_at = datetime.strptime(cached['updated_at'], '%Y-%m-%d %H:%M:%S.%f')
+                    except ValueError:
+                        updated_at = datetime.strptime(cached['updated_at'], '%Y-%m-%d %H:%M:%S')
+                else:
+                    updated_at = cached['updated_at']
+
+                if datetime.now() - updated_at < timedelta(hours=6):
+                    with sync_lock:
+                        sync_status["current"] += 1
+                    return
+            
             df = fetch_stock_data(ticker, days=200, force_download=True)
             if not df.empty and len(df) >= 60:
                 df = compute_all_indicators(df)
                 score = calculate_rise_score(df)
-                ai_prob = predict_prob(df)
+                
+                ai_result = predict_prob(df)
+                ai_prob = 0.0
+                if isinstance(ai_result, dict):
+                    ai_prob = ai_result.get('prob', 0.0)
+                    score['ai_details'] = ai_result.get('details', {})
+                else:
+                    ai_prob = ai_result
+                    
                 save_score_to_db(ticker, score, ai_prob)
-        except Exception:
-            pass
-        sync_status["current"] += 1
+                save_indicators_to_db(ticker, df)
+        except Exception as e:
+            print(f"Sync error for {ticker}: {e}")
+            
+        with sync_lock:
+            sync_status["current"] += 1
+
+    # Using 12 workers for faster throughput
+    with ThreadPoolExecutor(max_workers=12) as executor:
+        executor.map(process_stock, all_stocks)
         
     sync_status["is_syncing"] = False
     sync_status["last_updated"] = "Just now"
@@ -186,9 +236,6 @@ def get_stock_detail(ticker: str):
         
     score['ai_details'] = ai_details
     
-    # Save latest calculation to DB
-    save_score_to_db(ticker, score, ai_prob)
-    
     last_price = score['last_price'] or 0
     
     history = df.tail(30)[['date', 'close', 'volume']].to_dict('records')
@@ -204,6 +251,71 @@ def get_stock_detail(ticker: str):
         "ai_stop_price": round(last_price * 0.95, 2) if last_price else 0,
         "history": history
     }
+
+@app.get("/api/backtest")
+def run_backtest_simulation(days: int = 30):
+    """
+    Run 'Time Machine' backtest.
+    """
+    try:
+        # Limit to Top 100 scores to keep it fast (uses cached DB data now)
+        result = run_time_machine(days_ago=days, limit=100)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/smart_scan")
+def smart_scan(criteria: List[str] = []):
+    """
+    Scans Top 100 stocks for composite conditions using CACHED indicators where possible.
+    """
+    candidates = get_top_scores_from_db(limit=100, sort_by="score")
+    results = []
+    
+    for c in candidates:
+        ticker = c['ticker']
+        try:
+            # 1. Try to load from CACHE first (Super Fast)
+            cached_indicators = load_indicators_from_db(ticker)
+            
+            if cached_indicators:
+                # check_smart_conditions expects a DataFrame or enough info to calculate
+                # Let's adjust check_smart_conditions to handle cached data if possible,
+                # or just fetch if cache is missing.
+                
+                # OPTIMIZATION: Use load_from_db instead of fetch_stock_data to avoid network calls.
+                # If data is stale, it's better to scan stale data than hang.
+                df = load_from_db(ticker) 
+                
+                if df.empty or len(df) < 60: continue
+                
+                # Slicing: Only compute indicators for recent history (last 300 days is enough)
+                # calculating indicators on 20 years of data is slow and unnecessary.
+                if len(df) > 300:
+                    df = df.tail(300).copy()
+                    
+                # We skip compute_all_indicators if we have cache? 
+                # Actually check_smart_conditions needs indicators in columns.
+                # load_from_db returns OHLCV only. We must compute indicators.
+                df = compute_all_indicators(df) 
+                
+                # Ensure 'c' has required keys before accessing
+                if not isinstance(c, dict): continue
+                
+                ai_prob = c.get('ai_probability', 0)
+                if check_smart_conditions(df, ai_prob, criteria):
+                    results.append({
+                        "ticker": ticker,
+                        "name": c.get('name', ticker),
+                        "ai_probability": ai_prob,
+                        "score": c, # Return full object for frontend compatibility
+                        "price": c.get('last_price', 0),
+                        "matches": criteria
+                    })
+        except:
+            continue
+            
+    return results
 
 if __name__ == "__main__":
     import argparse

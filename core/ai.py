@@ -25,6 +25,7 @@ FEATURE_COLS = [
     'atr_norm',
     'bb_width', 'bb_percent',
     'k', 'd', 'kd_diff',
+    'total_score', 'trend_score', 'momentum_score', 'volatility_score'
 ]
 
 def prepare_features(df):
@@ -42,6 +43,10 @@ def prepare_features(df):
     for col in required:
         if col not in df.columns:
             return pd.DataFrame(), pd.Series()
+            
+    # --- Add Rise Scores (Vectorized) ---
+    from core.analysis import add_rise_scores_to_df
+    df = add_rise_scores_to_df(df)
     
     # --- Derived Features (Normalized) ---
     close = df['close'].replace(0, np.nan)
@@ -283,6 +288,16 @@ def predict_prob(df):
         'd': latest['d'],
         'kd_diff': latest['k'] - latest['d'],
     }
+    
+    # --- Add Rise Scores for Prediction ---
+    from core.analysis import calculate_rise_score
+    scores = calculate_rise_score(df)
+    features.update({
+        'total_score': scores['total_score'],
+        'trend_score': scores['trend_score'],
+        'momentum_score': scores['momentum_score'],
+        'volatility_score': scores['volatility_score']
+    })
     
     X_single = pd.DataFrame([features])
     X_single = X_single.replace([np.inf, -np.inf], np.nan).fillna(0)

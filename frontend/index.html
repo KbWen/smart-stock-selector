@@ -481,6 +481,8 @@
             <button class="tab-btn active" data-target="technical" onclick="switchTab('technical')">🔥 Technical
                 Picks</button>
             <button class="tab-btn" data-target="ai" onclick="switchTab('ai')">🤖 AI Ranking (Top 50)</button>
+            <button class="tab-btn" data-target="smart-scan" onclick="switchTab('smart-scan')">🔔 Smart Scans</button>
+            <button class="tab-btn" data-target="backtest" onclick="switchTab('backtest')">🧪 Backtest Lab</button>
         </div>
 
         <!-- NEW: Definition / Transparency Card -->
@@ -576,11 +578,20 @@
 
     <script>
         let CURRENT_TAB = 'technical'; // 'technical' or 'ai'
+        let abortController = null; // Global controller for cancelling requests
+
+        // Global State for Caching & Persistence
+        const APP_STATE = {
+            backtest: { status: 'idle', data: null, html: null },
+            smartScan: { status: 'idle', data: null },
+            ai: { status: 'idle', data: null },
+            technical: { status: 'idle', data: null }
+        };
 
         // --- Init ---
         document.addEventListener('DOMContentLoaded', () => {
             updateDefinitionCard();
-            fetchData();
+            renderTabFromState_or_Fetch(); // Use new render logic
             pollSyncStatus();
 
             // Search Debounce
@@ -593,11 +604,71 @@
 
         // --- Tabs ---
         function switchTab(tab) {
+            if (CURRENT_TAB === tab) return;
+
+            // Cancel any pending request if meaningful
+            if (abortController) {
+                // We abort previous requests to "clear the pipe"
+                // But for persisted tabs (backtest), maybe we shouldn't?
+                // For now, let's keep it simple: abort strictly ensures
+                // we don't handle stale responses.
+                console.log("Cancelling previous request due to tab switch");
+                abortController.abort();
+            }
+            abortController = new AbortController();
+
             CURRENT_TAB = tab;
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
             document.querySelector(`.tab-btn[data-target="${tab}"]`).classList.add('active');
             updateDefinitionCard();
-            fetchData();
+
+            // Render from State or Fetch
+            renderTabFromState_or_Fetch();
+        }
+
+        async function renderTabFromState_or_Fetch() {
+            const container = document.getElementById('table-container');
+
+            // 1. Handle Backtest specifically (Custom UI)
+            if (CURRENT_TAB === 'backtest') {
+                if (APP_STATE.backtest.status === 'done' && APP_STATE.backtest.html) {
+                    container.innerHTML = APP_STATE.backtest.html;
+                } else if (APP_STATE.backtest.status === 'loading') {
+                    container.innerHTML = `<div class="loading">⏳ Traveling back 30 days... (This may take a moment)</div>`;
+                } else {
+                    renderDefaultBacktestUI(container);
+                }
+                return;
+            }
+
+            // 2. Handle Smart Scan
+            if (CURRENT_TAB === 'smart-scan') {
+                if (APP_STATE.smartScan.data) {
+                    renderTable(APP_STATE.smartScan.data);
+                } else {
+                    fetchSmartScan();
+                }
+                return;
+            }
+
+            // 3. Handle Standard Tabs (AI, Technical)
+            let stateKey = CURRENT_TAB === 'ai' ? 'ai' : 'technical';
+
+            if (APP_STATE[stateKey].data) {
+                renderTable(APP_STATE[stateKey].data);
+            } else {
+                fetchData();
+            }
+        }
+
+        function renderDefaultBacktestUI(container) {
+            container.innerHTML = `
+                <div style="text-align:center; padding:40px;">
+                    <h3 style="color:var(--text-main)">🧪 Time Machine Backtest</h3>
+                    <p style="color:var(--text-muted)">Verify AI performance by simulating a buy 30 days ago.</p>
+                    <button class="btn btn-primary" onclick="runBacktest()" style="padding:15px 30px; font-size:1.2rem; margin-top:20px;">🚀 Start 30-Day Simulation</button>
+                </div>
+             `;
         }
 
         function updateDefinitionCard() {
@@ -618,7 +689,7 @@
                         </div>
                     </div>
                 `;
-            } else {
+            } else if (CURRENT_TAB === 'ai') {
                 card.style.borderColor = 'rgba(168, 85, 247, 0.2)';
                 card.style.background = 'rgba(168, 85, 247, 0.05)';
                 card.innerHTML = `
@@ -634,25 +705,214 @@
                         </div>
                     </div>
                 `;
+            } else if (CURRENT_TAB === 'smart-scan') {
+                card.style.borderColor = 'rgba(255, 142, 60, 0.2)';
+                card.style.background = 'rgba(255, 142, 60, 0.05)';
+                card.innerHTML = `
+                   <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+                        <div style="flex: 1; min-width: 200px;">
+                            <strong style="color: var(--warning); display: block; margin-bottom: 5px;">🔔 Smart Alerts (複合策略)</strong>
+                            篩選符合特定「AI + 技術面」組合條件的潛力股。
+                        </div>
+                        <div style="flex: 2; display: flex; gap: 15px; flex-wrap: wrap; align-items: center;">
+                            <label><input type="checkbox" id="chk-high-ai" checked onchange="fetchSmartScan()"> High AI (>70%)</label>
+                            <label><input type="checkbox" id="chk-vol-surge" onchange="fetchSmartScan()"> Volume Surge (>1.5x)</label>
+                            <label><input type="checkbox" id="chk-kd-gold" onchange="fetchSmartScan()"> KD Golden Cross</label>
+                            <label><input type="checkbox" id="chk-macd-bull" onchange="fetchSmartScan()"> MACD Flip</label>
+                        </div>
+                    </div>
+                `;
+            } else {
+                card.style.borderColor = 'rgba(34, 197, 94, 0.2)';
+                card.style.background = 'rgba(34, 197, 94, 0.05)';
+                card.innerHTML = `
+                    <div style="display: flex; gap: 20px; align-items: center;">
+                         <strong style="color: var(--success); font-size: 1.1rem;">🧪 Time Machine Backtest</strong>
+                         <div>
+                            使用過去的數據來驗證 AI 模型的實戰表現。這可以回答："如果我 30 天前跟著 AI 買，現在賺多少？"
+                         </div>
+                         <button class="btn btn-primary" onclick="runBacktest()" style="margin-left: auto;">🚀 Run 30-Day Sim</button>
+                    </div>
+                 `;
             }
         }
 
         // --- Fetch Data ---
         async function fetchData() {
             const container = document.getElementById('table-container');
-            container.innerHTML = '<div class="loading">Fetching market data...</div>';
-
-            // Map tab to API sort param
-            const sortParam = CURRENT_TAB === 'ai' ? 'ai' : 'score';
+            container.innerHTML = '<div class="loading">Loading...</div>';
 
             try {
-                const res = await fetch(`/api/top_picks?sort=${sortParam}`);
-                if (!res.ok) throw new Error("API Error");
+                let url = '/api/top_picks?sort=score';
+                let stateKey = 'technical';
+
+                if (CURRENT_TAB === 'ai') {
+                    url = '/api/top_picks?sort=ai';
+                    stateKey = 'ai';
+                }
+
+                const res = await fetch(url, { signal: abortController?.signal });
                 const data = await res.json();
+
+                // Cache it
+                APP_STATE[stateKey].data = data;
+                APP_STATE[stateKey].status = 'done';
+
                 renderTable(data);
             } catch (err) {
-                console.error(err);
-                container.innerHTML = '<div class="loading" style="color:var(--danger)">Failed to load data.<br>Ensure backend is running.</div>';
+                if (err.name === 'AbortError') return;
+                container.innerHTML = `<div style="text-align:center; padding:20px; color:var(--error)">Error loading data: ${err.message}</div>`;
+            }
+        }
+
+        async function fetchSmartScan() {
+            const container = document.getElementById('table-container');
+
+            // If we have data and we just switched back, we might want to skip fetch?
+            // But this function is also called on checkbox change.
+            // Let's just always fetch on interaction, but save to state.
+
+            const criteria = [];
+            if (document.getElementById('chk-high-ai')?.checked) criteria.push('high_ai');
+            if (document.getElementById('chk-vol-surge')?.checked) criteria.push('vol_surge');
+            if (document.getElementById('chk-kd-gold')?.checked) criteria.push('kd_gold');
+            if (document.getElementById('chk-macd-bull')?.checked) criteria.push('macd_bull');
+
+
+            container.innerHTML = '<div class="loading">Scanning Market...</div>';
+
+            try {
+                const res = await fetch('/api/smart_scan', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(criteria),
+                    signal: abortController?.signal
+                });
+                const data = await res.json();
+
+
+                // Save to State
+                APP_STATE.smartScan.data = data;
+                APP_STATE.smartScan.status = 'done';
+
+                // Double check if we are still on the smart-scan tab
+                if (CURRENT_TAB === 'smart-scan') {
+                    renderTable(data);
+                }
+            } catch (err) {
+                if (err.name === 'AbortError') return;
+                container.innerHTML = `<div style="text-align:center; padding:20px; color:var(--error)">Scan Error: ${err.message}</div>`;
+            }
+        }
+
+        async function runBacktest() {
+            const container = document.getElementById('table-container');
+
+            // Set State to Loading
+            APP_STATE.backtest.status = 'loading';
+            APP_STATE.backtest.html = null;
+
+            container.innerHTML = '<div class="loading">⏳ Traveling back 30 days... (This may take a moment)</div>';
+
+            try {
+                // We do NOT use abortController here if we want it to persist? 
+                // Actually, if we use the global abortController, switching tabs cancels it.
+                // To keep it running, we should use a separate controller or none.
+                // Let's use none for backtest to allow background processing.
+                const res = await fetch('/api/backtest?days=30');
+                const data = await res.json();
+
+                // Render Backtest Result
+                if (data.error || data.detail) {
+                    const errorMsg = data.error || data.detail;
+                    const errorHtml = `<div style="text-align:center; padding:20px; color:var(--error)">Backtest Error: ${errorMsg}</div>`;
+                    container.innerHTML = errorHtml;
+                    APP_STATE.backtest.status = 'error';
+                    return;
+                }
+
+                const summary = data.summary;
+                const picks = data.top_picks || data.top_10_picks; // Backward compatibility
+
+                let html = `
+                    <div style="padding:20px; animation: fadeIn 0.5s;">
+                        <h2 style="text-align:center; color:var(--text-main); margin-bottom:5px;">🧪 Simulation Result</h2>
+                        <p style="text-align:center; color:var(--text-muted); margin-bottom:20px;">Entry Date: ${data.simulated_date} (30 Days Ago)</p>
+
+                        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:15px; margin-bottom:25px;">
+                            <div class="stat-box" style="text-align:center; border: 1px solid ${summary.avg_return > 0 ? 'var(--success)' : 'var(--error)'}">
+                                <div style="color:var(--text-muted)">Avg Return (30d)</div>
+                                <div style="font-size:1.8rem; font-weight:bold; color: ${summary.avg_return > 0 ? 'var(--success)' : 'var(--error)'}">
+                                    ${(summary.avg_return * 100).toFixed(1)}%
+                                </div>
+                            </div>
+                            <div class="stat-box" style="text-align:center;">
+                                <div style="color:var(--text-muted)">Win Rate</div>
+                                <div style="font-size:1.8rem; font-weight:bold; color:var(--accent)">
+                                    ${(summary.win_rate * 100).toFixed(0)}%
+                                </div>
+                            </div>
+                             <div class="stat-box" style="text-align:center;">
+                                <div style="color:var(--text-muted)">Best Pick</div>
+                                <div style="font-size:1.2rem; font-weight:bold; color:var(--text-main)">
+                                    ${summary.best_stock}
+                                </div>
+                                <div style="color:${summary.best_return > 0 ? 'var(--success)' : 'var(--error)'}">
+                                    ${(summary.best_return * 100).toFixed(1)}%
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <h3 style="margin-bottom:15px;">📜 Historical Top 20 Picks</h3>
+                        <div class="table-wrapper">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Ticker</th>
+                                        <th>Entry Price</th>
+                                        <th>Current Price</th>
+                                        <th>AI Prob (Then)</th>
+                                        <th>Return</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                `;
+
+                // Add rows
+                picks.forEach(p => {
+                    const retColor = p.actual_return > 0 ? 'var(--success)' : 'var(--error)';
+                    html += `
+                        <tr>
+                            <td><span style="font-weight:bold; color:var(--text-main)">${p.ticker}</span> <span style="color:var(--text-muted); font-size:0.9em">${p.name}</span></td>
+                            <td>$${p.entry_price.toFixed(1)}</td>
+                            <td>$${p.current_price.toFixed(1)}</td>
+                            <td><span class="badge badge-ai">${(p.ai_prob_at_entry * 100).toFixed(0)}%</span></td>
+                            <td style="color:${retColor}; font-weight:bold;">${(p.actual_return * 100).toFixed(1)}%</td>
+                        </tr>
+                    `;
+                });
+
+                html += `</tbody></table></div></div>
+                    <div style="text-align:center; margin-top:30px;">
+                        <button class="btn" onclick="APP_STATE.backtest.status='idle'; renderDefaultBacktestUI(document.getElementById('table-container'))">🔄 Run Another Simulation</button>
+                    </div>
+                `;
+
+                // Save Result to State
+                APP_STATE.backtest.status = 'done';
+                APP_STATE.backtest.html = html;
+
+                // Only render if we are still on the backtest tab
+                if (CURRENT_TAB === 'backtest') {
+                    container.innerHTML = html;
+                }
+
+            } catch (err) {
+                // If we didn't use abortController, this is a real network error
+                if (CURRENT_TAB === 'backtest') {
+                    container.innerHTML = `<div style="text-align:center; padding:20px; color:var(--error)">Backtest Error: ${err.message}</div>`;
+                }
+                APP_STATE.backtest.status = 'error';
             }
         }
 
@@ -927,21 +1187,28 @@
             const bar = document.getElementById('progressBar');
             const fill = document.getElementById('progressFill');
             const txt = document.getElementById('syncStatus');
+            const syncBarParent = document.getElementById('progressBar'); // The parent container for the progress bar
+            const syncBar = document.getElementById('progressFill'); // The actual fill element
+            const syncLabel = document.getElementById('syncStatus'); // The text label
 
             const timer = setInterval(async () => {
                 const res = await fetch('/api/sync/status');
-                const s = await res.json();
+                const data = await res.json(); // Renamed 's' to 'data' for consistency with the provided snippet
 
-                if (s.is_syncing || s.current > 0) {
-                    bar.style.display = 'block';
-                    const pct = s.total ? (s.current / s.total * 100) : 0;
-                    fill.style.width = pct + "%";
-                    txt.innerText = `Syncing... ${s.current} / ${s.total}`;
+                if (data.is_syncing) {
+                    syncBarParent.style.display = 'block';
+                    const percent = (data.current / data.total) * 100;
+                    syncBar.style.width = percent + '%';
+                    let statusText = `Syncing... ${data.current} / ${data.total}`;
+                    if (data.current_ticker) {
+                        statusText += ` <span style="color:var(--primary); font-size:0.8rem; margin-left:10px;">[ ${data.current_ticker} ]</span>`;
+                    }
+                    syncLabel.innerHTML = statusText;
                 } else {
-                    txt.innerText = "";
+                    syncLabel.innerText = "";
                 }
 
-                if (!s.is_syncing && s.current > 0 && s.current >= s.total) { // Simple done check
+                if (!data.is_syncing && data.current > 0 && data.current >= data.total) { // Simple done check
                     clearInterval(timer);
                     txt.innerText = "Sync Done!";
                     setTimeout(() => { bar.style.display = 'none'; txt.innerText = ''; fetchData(); }, 2000);
