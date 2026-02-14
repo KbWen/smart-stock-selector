@@ -156,21 +156,22 @@ def run_sync_task():
                         
                     save_score_to_db(ticker, score, ai_prob, model_version=current_model_version)
                     save_indicators_to_db(ticker, df, model_version=current_model_version)
-            except Exception as e:
-                logger.error(f"Sync error for {ticker}: {e}")
+            except Exception:
+                logger.exception(f"Sync error for {ticker}")
                 
             with sync_lock:
                 sync_status["current"] += 1
 
-        # Using Configured Concurrency Workers
-        logger.info(f"Syncing with {config.CONCURRENCY_WORKERS} workers.")
-        with ThreadPoolExecutor(max_workers=config.CONCURRENCY_WORKERS) as executor:
+        # Dynamic workers based on load and config
+        num_workers = min(config.CONCURRENCY_WORKERS, len(all_stocks))
+        logger.info(f"Syncing {len(all_stocks)} stocks with {num_workers} workers.")
+        with ThreadPoolExecutor(max_workers=num_workers) as executor:
             executor.map(process_stock, all_stocks)
             
         logger.info("Sync task completed successfully.")
             
-    except Exception as e:
-        logger.error(f"Fatal error in run_sync_task: {e}")
+    except Exception:
+        logger.exception("Fatal error in run_sync_task")
     finally:
         sync_status["is_syncing"] = False
         sync_status["last_updated"] = "Just now"

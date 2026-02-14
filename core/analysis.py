@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+from core import config
 
 def calculate_rsi(data: pd.DataFrame, window: int = 14) -> pd.Series:
     """Standard Wilder's RSI using EWMA."""
@@ -79,54 +80,58 @@ def add_rise_scores_to_df(data: pd.DataFrame) -> pd.DataFrame:
         
     df = data.copy()
     
-    # 1. Trend (40%)
+    w_trend = config.WEIGHT_TREND * 100
+    w_mom = config.WEIGHT_MOMENTUM * 100
+    w_vol = config.WEIGHT_VOLATILITY * 100
+
+    # 1. Trend (Configurable weight)
     trend = pd.Series(0.0, index=df.index)
     # Price > SMA20 > SMA60
     cond1 = (df['close'] > df['sma_20']) & (df['sma_20'] > df['sma_60'])
-    trend = np.where(cond1, trend + 40, trend)
+    trend = np.where(cond1, trend + w_trend, trend)
     # Price > SMA20 only
     cond2 = (df['close'] > df['sma_20']) & ~cond1
-    trend = np.where(cond2, trend + 20, trend)
+    trend = np.where(cond2, trend + (w_trend * 0.5), trend)
     
     # SMA60 Slope (捕捉趨勢力度) - 5 day pct change
     sma60_slope = df['sma_60'].pct_change(5) * 100
-    trend = np.where(sma60_slope > 0, trend + 10, trend)
-    df['trend_score'] = trend.clip(0, 40)
+    trend = np.where(sma60_slope > 0, trend + (w_trend * 0.25), trend)
+    df['trend_score'] = trend.clip(0, w_trend)
 
-    # 2. Momentum (30%)
+    # 2. Momentum (Configurable weight)
     momentum = pd.Series(0.0, index=df.index)
     rsi = df['rsi'].fillna(50)
-    momentum = np.where((rsi >= 55) & (rsi <= 75), momentum + 15, momentum)
-    momentum = np.where(rsi > 80, momentum - 10, momentum)
+    momentum = np.where((rsi >= 55) & (rsi <= 75), momentum + (w_mom * 0.5), momentum)
+    momentum = np.where(rsi > 80, momentum - (w_mom * 0.3), momentum)
     
     # MACD Bullish
     macd_bull = (df['macd'] > df['macd_signal']) & (df['macd'] > 0)
-    momentum = np.where(macd_bull, momentum + 10, momentum)
+    momentum = np.where(macd_bull, momentum + (w_mom * 0.33), momentum)
     
     # KD Cross (Simplified version for vectorization)
     kd_bull = (df['k'] > df['d']) & (df['k'] < 80)
     # Check for actual cross by comparing with shifted row
     kd_prev_bull = (df['k'].shift(1) < df['d'].shift(1))
-    momentum = np.where(kd_bull & kd_prev_bull, momentum + 15, np.where(kd_bull, momentum + 5, momentum))
+    momentum = np.where(kd_bull & kd_prev_bull, momentum + (w_mom * 0.5), np.where(kd_bull, momentum + (w_mom * 0.16), momentum))
     
-    df['momentum_score'] = momentum.clip(0, 30)
+    df['momentum_score'] = momentum.clip(0, w_mom)
 
-    # 3. Volatility / Setup (30%)
+    # 3. Volatility / Setup (Configurable weight)
     volatility = pd.Series(0.0, index=df.index)
     
     # Volume explosion
     vol_ma20 = df['volume'].rolling(window=20).mean()
-    volatility = np.where(df['volume'] > vol_ma20 * 1.5, volatility + 15, 
-                          np.where(df['volume'] > vol_ma20, volatility + 5, volatility))
+    volatility = np.where(df['volume'] > vol_ma20 * 1.5, volatility + (w_vol * 0.5), 
+                          np.where(df['volume'] > vol_ma20, volatility + (w_vol * 0.16), volatility))
                           
     # Bollinger Squeeze
-    volatility = np.where(df['bb_width'] < 0.10, volatility + 10, volatility)
+    volatility = np.where(df['bb_width'] < 0.10, volatility + (w_vol * 0.33), volatility)
     
     # Bollinger Support
     bb_support = (df['bb_percent'] > 0) & (df['bb_percent'] < 0.2) & (df['close'] > df['open'])
-    volatility = np.where(bb_support, volatility + 10, volatility)
+    volatility = np.where(bb_support, volatility + (w_vol * 0.33), volatility)
     
-    df['volatility_score'] = volatility.clip(0, 30)
+    df['volatility_score'] = volatility.clip(0, w_vol)
     
     df['total_score'] = df['trend_score'] + df['momentum_score'] + df['volatility_score']
     

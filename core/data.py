@@ -5,6 +5,7 @@ import sqlite3
 import os
 import twstock
 import time
+import json
 from datetime import datetime, timedelta
 from functools import lru_cache
 from core import config
@@ -20,6 +21,7 @@ def init_db():
     
     # Enable Write-Ahead Logging for concurrency
     cursor.execute("PRAGMA journal_mode=WAL;")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_stock_date ON stock_history (ticker, date)")
     
     # Ensure table exists
     cursor.execute('''
@@ -143,13 +145,28 @@ _tw_stocks_cache = {
 }
 
 def get_all_tw_stocks():
-    """Returns a list of all TWSE stock codes. Caches for 1 hour."""
+    """Returns a list of all TWSE stock codes. Caches for 1 hour in memory and 24h in file."""
     now = time.time()
-    if _tw_stocks_cache["data"] and (now - _tw_stocks_cache["last_updated"] < 3600):
+    
+    # Memory Cache
+    if _tw_stocks_cache["data"] and (now - _tw_stocks_cache["last_updated"] < config.CACHE_DURATION):
         return _tw_stocks_cache["data"]
 
+    # File Cache
+    if os.path.exists(config.STOCK_LIST_CACHE):
+        try:
+            mtime = os.path.getmtime(config.STOCK_LIST_CACHE)
+            if now - mtime < 86400: # 1 Day TTL for file cache
+                with open(config.STOCK_LIST_CACHE, 'r', encoding='utf-8') as f:
+                    stocks = json.load(f)
+                    _tw_stocks_cache["data"] = stocks
+                    _tw_stocks_cache["last_updated"] = now
+                    return stocks
+        except Exception:
+            pass
+
     stocks = []
-    # This loop is slow if run every time.
+    # Generation from twstock (Slow)
     for code, info in twstock.codes.items():
         if info.type == '股票' and info.market == '上市':
             stocks.append({
@@ -157,6 +174,13 @@ def get_all_tw_stocks():
                 "name": info.name
             })
     
+    # Save to File Cache
+    try:
+        with open(config.STOCK_LIST_CACHE, 'w', encoding='utf-8') as f:
+            json.dump(stocks, f, ensure_ascii=False)
+    except Exception:
+        pass
+
     _tw_stocks_cache["data"] = stocks
     _tw_stocks_cache["last_updated"] = now
     return stocks
@@ -230,14 +254,14 @@ def fetch_stock_data(ticker: str, days: int = 365, force_download: bool = False)
     for attempt in range(max_retries):
         try:
             stock = yf.Ticker(yf_ticker)
-            df = stock.history(period=f"{days}d")
+            df = stock.history(period=f"{days}d", timeout=10)
             
             if df.empty:
                 # Try .TWO if .TW failed (First attempt only to switch suffix)
                 if attempt == 0: 
                     yf_ticker = f"{ticker}.TWO"
                     stock = yf.Ticker(yf_ticker)
-                    df = stock.history(period=f"{days}d")
+                    df = stock.history(period=f"{days}d", timeout=10)
                 
             if not df.empty:
                 df = df.reset_index()

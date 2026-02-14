@@ -19,3 +19,13 @@ CPU_COUNT = os.cpu_count() or 4
 CONCURRENCY_WORKERS = int(os.getenv("CONCURRENCY_WORKERS", 5)) 
 CACHE_DURATION = int(os.getenv("CACHE_DURATION", 3600))
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+
+# Rise Score Weights (Sum should be 1.0)
+WEIGHT_TREND = float(os.getenv("WEIGHT_TREND", 0.40))
+WEIGHT_MOMENTUM = float(os.getenv("WEIGHT_MOMENTUM", 0.30))
+WEIGHT_VOLATILITY = float(os.getenv("WEIGHT_VOLATILITY", 0.30))
+
+# Cache Paths
+STOCK_LIST_CACHE = os.path.join(BASE_DIR, "stock_list_cache.json")
+MARKET_HISTORY_PATH = os.path.join(BASE_DIR, "market_history.json")
+MODELS_HISTORY_PATH = os.path.join(BASE_DIR, "models_history.json")

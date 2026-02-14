@@ -13,7 +13,8 @@
             --bg-color: #0f172a;
             --card-bg: #1e293b;
             --text-main: #f8fafc;
-            --text-muted: #94a3b8;
+            --text-muted: #cbd5e1;
+            /* Optimized for higher contrast */
             --accent: #38bdf8;
             --success: #10b981;
             --warning: #f59e0b;
@@ -216,15 +217,50 @@
             width: 100%;
             height: 3px;
             background: var(--accent);
+            /* Default */
             border-radius: 2px;
+            transition: background-color 0.3s;
+        }
+
+        /* Specific Tab Underlines */
+        .tab-btn[data-target="technical"].active::after {
+            background: var(--success);
         }
 
         .tab-btn[data-target="ai"].active::after {
             background: var(--ai-color);
         }
 
+        .tab-btn[data-target="market"].active::after {
+            background: #38bdf8;
+        }
+
+        .tab-btn[data-target="smart-scan"].active::after {
+            background: var(--warning);
+        }
+
+        .tab-btn[data-target="backtest"].active::after {
+            background: #f472b6;
+        }
+
+        .tab-btn[data-target="technical"]:hover {
+            color: var(--success);
+        }
+
         .tab-btn[data-target="ai"]:hover {
             color: var(--ai-color);
+        }
+
+        .tab-btn[data-target="market"]:hover {
+            color: #38bdf8;
+        }
+
+        .tab-btn[data-target="smart-scan"]:hover {
+            color: var(--warning);
+        }
+
+        .tab-btn[data-target="backtest"]:hover {
+            color: #f472b6;
         }
 
         /* Card & Table */
@@ -1570,23 +1606,23 @@
                 let headers = `
                     <th onclick="handleSort('ticker')" style="cursor:pointer" title="Stock Ticker Symbol">${i18n('col_ticker')} ${sortIcon('ticker')}</th>
                     <th style="min-width: 100px;">${i18n('col_name')}</th>
-                    <th onclick="handleSort('price')" style="cursor:pointer; text-align:right" title="Last Close Price">${i18n('col_price')} ${sortIcon('price')}</th>
+                    <th onclick="handleSort('price')" style="cursor:pointer; text-align:right" title="Last Close Price (20min delay)">${i18n('col_price')} ${sortIcon('price')}</th>
                     <th onclick="handleSort('change')" style="cursor:pointer; text-align:right" title="Daily Change %">${i18n('col_change')} ${sortIcon('change')}</th>
                 `;
 
                 if (isAIBased) {
                     headers += `
-                        <th onclick="handleSort('target')" style="cursor:pointer; text-align:right" title="AI Predicted 20-Day Target">${i18n('col_target')} ${sortIcon('target')}</th>
-                        <th style="text-align:right" title="AI Recommended Stop Loss">${i18n('col_stop')}</th>
-                        <th onclick="handleSort('rise')" style="cursor:pointer; text-align:right" title="Heuristic Score (Trend + Momt + Vol)">${i18n('col_rise')} ${sortIcon('rise')}</th>
-                        <th style="text-align:center" title="Technical Signal Icon">${i18n('col_signal')}</th>
-                        <th onclick="handleSort('ai')" style="cursor:pointer; text-align:right" title="Ensemble AI Win Probability">${i18n('col_ai')} ${sortIcon('ai')}</th>
+                        <th onclick="handleSort('target')" style="cursor:pointer; text-align:right" title="AI Expected Target (+15%)">${i18n('col_target')} ${sortIcon('target')}</th>
+                        <th style="text-align:right" title="AI Exit Point (-5%)">${i18n('col_stop')}</th>
+                        <th onclick="handleSort('rise')" style="cursor:pointer; text-align:right" title="Technical Score (0-100)">${i18n('col_rise')} ${sortIcon('rise')}</th>
+                        <th style="text-align:center" title="Technical Confirmation Signal">${i18n('col_signal')}</th>
+                        <th onclick="handleSort('ai')" style="cursor:pointer; text-align:right" title="AI Sniper Model Win Prob. (60%+ Recommended)">${i18n('col_ai')} ${sortIcon('ai')}</th>
                     `;
                 } else {
                     headers += `
-                        <th onclick="handleSort('trend')" style="cursor:pointer; text-align:right" title="SMA 20/60 Alignment Score">${i18n('col_trend')} ${sortIcon('trend')}</th>
-                        <th onclick="handleSort('momt')" style="cursor:pointer; text-align:right" title="RSI & KD Momentum Score">${i18n('col_momt')} ${sortIcon('momt')}</th>
-                        <th onclick="handleSort('rise')" style="cursor:pointer; text-align:right" title="Combined Technical Launch Score">${i18n('col_rise')} ${sortIcon('rise')}</th>
+                        <th onclick="handleSort('trend')" style="cursor:pointer; text-align:right" title="Trend Score (EMA 20/60 Cross)">${i18n('col_trend')} ${sortIcon('trend')}</th>
+                        <th onclick="handleSort('momt')" style="cursor:pointer; text-align:right" title="Momentum Score (RSI/MACD/KD)">${i18n('col_momt')} ${sortIcon('momt')}</th>
+                        <th onclick="handleSort('rise')" style="cursor:pointer; text-align:right" title="Total Technical Score (Weighted)">${i18n('col_rise')} ${sortIcon('rise')}</th>
                     `;
                 }
                 thead.innerHTML = `<tr>${headers}</tr>`;
@@ -1612,11 +1648,11 @@
                     const lastPrice = score.last_price || item.price || 0;
                     const isSelected = item.ticker === SELECTED_TICKER ? 'selected-row' : '';
 
-                    // Color logic
-                    let scoreClass = 'badge-score-low';
+                    // Standardized color logic
+                    let scoreClass = 'badge-score-low'; // < 60 Red
                     const totalScore = score.total_score || 0;
-                    if (totalScore >= 80) scoreClass = 'badge-score-high';
-                    else if (totalScore >= 60) scoreClass = 'badge-score-mid';
+                    if (totalScore >= 80) scoreClass = 'badge-score-high'; // Green
+                    else if (totalScore >= 60) scoreClass = 'badge-score-mid'; // Yellow
 
                     const changePercent = score.change_percent || 0;
                     const changeColor = changePercent >= 0 ? 'var(--success)' : 'var(--danger)';
@@ -1630,12 +1666,13 @@
                             <td style="text-align:right" data-field="rise" data-value="${totalScore}"><span class="badge ${scoreClass}">${totalScore.toFixed(0)}</span></td>
                         `;
                     } else {
-                        let aiClass = 'var(--text-muted)';
+                        // Standardized AI Prob colors
+                        let aiClass = 'var(--text-muted)'; // Default gray
                         let aiBadgeStyle = 'rgba(255,255,255,0.05)';
-                        if (ai > 0.3) {
+                        if (ai >= 0.6) { // High Green
                             aiClass = 'var(--success)';
                             aiBadgeStyle = 'rgba(16, 185, 129, 0.2)';
-                        } else if (ai > 0.15) {
+                        } else if (ai >= 0.3) { // Mid Yellow
                             aiClass = 'var(--warning)';
                             aiBadgeStyle = 'rgba(245, 158, 11, 0.2)';
                         }
@@ -1652,7 +1689,7 @@
                             <td style="text-align:right; color:var(--success)" data-field="target" data-value="${targetP}">$${parseFloat(targetP).toFixed(1)}</td>
                             <td style="text-align:right; color:var(--danger)">$${parseFloat(stopP).toFixed(1)}</td>
                             <td style="text-align:right; color:${riseColor}; font-weight:bold;" data-field="rise" data-value="${totalScore}">${totalScore.toFixed(0)}</td>
-                            <td style="text-align:center; color:${aiClass}">${ai > 0.3 ? '🔥' : (ai > 0.15 ? '⚡' : '💤')}</td>
+                            <td style="text-align:center; color:${aiClass}">${ai >= 0.6 ? '🔥' : (ai >= 0.3 ? '⚡' : '💤')}</td>
                             <td style="text-align:right" data-field="ai" data-value="${ai}"><span class="badge badge-ai" style="background:${aiBadgeStyle}; border: 1px solid ${aiClass}">${pct}</span></td>
                         `;
                     }
@@ -1925,6 +1962,7 @@
                 }
             }
 
+            let syncStartTime = null;
             async function pollSyncStatus() {
                 const bar = document.getElementById('progressBar');
                 const fill = document.getElementById('progressFill');
@@ -1938,15 +1976,32 @@
                     const data = await res.json(); // Renamed 's' to 'data' for consistency with the provided snippet
 
                     if (data.is_syncing) {
+                        if (!syncStartTime) syncStartTime = Date.now();
                         syncBarParent.style.display = 'block';
                         const percent = (data.current / data.total) * 100;
                         syncBar.style.width = percent + '%';
-                        let statusText = `Syncing... ${data.current} / ${data.total}`;
+
+                        // Calculate ETA
+                        let etaStr = "";
+                        const elapsed = (Date.now() - syncStartTime) / 1000;
+                        if (data.current > 5 && elapsed > 5) {
+                            const speed = data.current / elapsed;
+                            const remainingStocks = data.total - data.current;
+                            const etaSeconds = Math.round(remainingStocks / speed);
+                            if (etaSeconds > 60) {
+                                etaStr = ` | ETA: ${Math.floor(etaSeconds / 60)}m ${etaSeconds % 60}s`;
+                            } else {
+                                etaStr = ` | ETA: ${etaSeconds}s`;
+                            }
+                        }
+
+                        let statusText = `Syncing... ${data.current} / ${data.total}${etaStr}`;
                         if (data.current_ticker) {
-                            statusText += ` <span style="color:var(--primary); font-size:0.8rem; margin-left:10px;">[ ${data.current_ticker} ]</span>`;
+                            statusText += ` <span style="color:var(--accent); font-size:0.8rem; margin-left:10px;">[ ${data.current_ticker} ]</span>`;
                         }
                         syncLabel.innerHTML = statusText;
                     } else {
+                        syncStartTime = null;
                         syncLabel.innerText = "";
                     }
 

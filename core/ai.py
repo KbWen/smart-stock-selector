@@ -90,37 +90,36 @@ def prepare_features(df):
     # 2: Strong Buy (+15% before -5%)
     # 1: Buy (+10% before -5%)
     # 0: Hold (Default)
-    targets = []
-    for i in range(len(df)):
-        entry_price = df.iloc[i]['close']
+    # Optimization: Use numpy arrays for much faster iteration
+    closes = df['close'].values
+    highs = df['high'].values
+    lows = df['low'].values
+    n = len(df)
+    targets = [0] * n
+    
+    for i in range(n - PRED_DAYS):
+        entry_price = closes[i]
         target_strong = entry_price * 1.15
         target_buy = entry_price * 1.10
         stop_price = entry_price * 0.95
         
         result = 0
-        future = df.iloc[i+1 : i+1+PRED_DAYS]
-        for _, day in future.iterrows():
-            # Check for Stop Loss FIRST to be conservative
-            if day['low'] <= stop_price:
+        # Look ahead PRED_DAYS
+        for j in range(i + 1, i + 1 + PRED_DAYS):
+            # Check Stop Loss FIRST
+            if lows[j] <= stop_price:
                 result = 0
                 break
-            
-            # Check for Strong Buy
-            if day['high'] >= target_strong:
-                result = 2  # Strong Buy
+            # Check Strong Buy
+            if highs[j] >= target_strong:
+                result = 2
                 break
-                
-            # If not strong buy yet, check for Buy
-            if day['high'] >= target_buy:
-                # Need to keep looking to see if it hits Strong Buy before Stop Loss
-                # but for simplicity in this loop, if it hits 10% first, we label as 1
-                # and only upgrade if it hits 15% later IN THE SAME Loop.
-                # Actually, let's just mark the highest achieved target.
-                result = max(result, 1)
-                # We continue the loop to see if it reaches 2 (+15%)
+            # Check normal Buy
+            if highs[j] >= target_buy:
+                result = max(result, 1) # Keep looking for 2 unless we hit stop
         
-        targets.append(result)
-    
+        targets[i] = result
+        
     df['target'] = targets
     
     # Drop NaN rows
