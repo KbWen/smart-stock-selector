@@ -6,6 +6,7 @@ import os
 import twstock
 import time
 import json
+from typing import List, Optional, Dict
 from datetime import datetime, timedelta
 from functools import lru_cache
 from core import config
@@ -61,6 +62,9 @@ def init_db():
             PRIMARY KEY (ticker, model_version)
         )
     ''')
+    
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_scores_version ON stock_scores (model_version)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_scores_updated ON stock_scores (updated_at DESC)')
     
     # Create indicators table for caching computation results
     cursor.execute('''
@@ -150,7 +154,8 @@ def load_indicators_from_db(ticker):
 # Manual TTL Cache for TW Stocks
 _tw_stocks_cache = {
     "data": None,
-    "last_updated": 0
+    "last_updated": 0,
+    "name_map": None
 }
 
 def get_all_tw_stocks():
@@ -170,6 +175,7 @@ def get_all_tw_stocks():
                     stocks = json.load(f)
                     _tw_stocks_cache["data"] = stocks
                     _tw_stocks_cache["last_updated"] = now
+                    _tw_stocks_cache["name_map"] = {s['code']: s['name'] for s in stocks}
                     return stocks
         except Exception:
             pass
@@ -183,6 +189,10 @@ def get_all_tw_stocks():
                 "name": info.name
             })
     
+    _tw_stocks_cache["data"] = stocks
+    _tw_stocks_cache["last_updated"] = now
+    _tw_stocks_cache["name_map"] = {s['code']: s['name'] for s in stocks}
+    
     # Save to File Cache
     try:
         with open(config.STOCK_LIST_CACHE, 'w', encoding='utf-8') as f:
@@ -190,17 +200,15 @@ def get_all_tw_stocks():
     except Exception:
         pass
 
-    _tw_stocks_cache["data"] = stocks
-    _tw_stocks_cache["last_updated"] = now
     return stocks
 
-def get_stock_name_from_db(ticker: str) -> str:
-    """Returns the name of a stock given its ticker."""
-    # First try twstock dictionary (fastest)
+def get_stock_name(ticker: str) -> Optional[str]:
+    """Returns the name of a stock based on its ticker, using cached name map."""
+    if _tw_stocks_cache["name_map"] is None:
+        get_all_tw_stocks() # Load cache
+        
     code_only = standardize_ticker(ticker)
-    if code_only in twstock.codes:
-        return twstock.codes[code_only].name
-    return None
+    return _tw_stocks_cache["name_map"].get(code_only)
 
 def save_to_db(ticker, df):
     if df.empty: return
@@ -360,7 +368,7 @@ def search_stocks_global(query: str):
         tickers = [row['ticker'] for row in conn.execute(sql, (q, q, q)).fetchall()]
         results = []
         for t in tickers:
-            name = get_stock_name_from_db(t)
+            name = get_stock_name(t)
             results.append({"ticker": t, "name": name or t})
         return results
     finally:

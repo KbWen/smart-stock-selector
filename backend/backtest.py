@@ -42,10 +42,10 @@ def run_time_machine(days_ago=30, limit=20):
         ticker = stock["ticker"] if "ticker" in stock else stock["code"]
         try:
             # 1. Name Lookup (Improved)
-            from core.data import get_stock_name_from_db
+            from core.data import get_stock_name
             name = stock.get("name")
             if not name or name == ticker:
-                name = get_stock_name_from_db(ticker)
+                name = get_stock_name(ticker)
                 
             # Final Fallback if still None or ticker
             if not name or name == ticker:

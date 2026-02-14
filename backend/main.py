@@ -28,7 +28,8 @@ logger = logging.getLogger(__name__)
 from core.data import (
     fetch_stock_data, get_all_tw_stocks, save_score_to_db, 
     get_top_scores_from_db, get_db_connection,
-    save_indicators_to_db, load_indicators_from_db, load_from_db
+    save_indicators_to_db, load_indicators_from_db, load_from_db,
+    get_stock_name
 )
 from core.analysis import (
     calculate_rise_score, generate_analysis_report
@@ -213,14 +214,42 @@ def search_stocks_global_api(q: str = Query(..., min_length=1)):
     from core.data import search_stocks_global
     return search_stocks_global(q)
 
+@app.get("/api/init")
+def get_init_data():
+    """Consolidated endpoint for homepage initialization to reduce round-trips."""
+    t0 = time.time()
+    
+    # 1. Market Status
+    from core.market import get_market_status
+    market = get_market_status()
+    
+    # 2. Top Picks (Latest Technical)
+    picks = get_top_picks(sort="score")
+    
+    # 3. Models
+    from core.ai import list_available_models
+    models = list_available_models()
+    
+    # 4. Sync Status
+    curr_sync = sync_status
+    
+    total_time = time.time() - t0
+    logger.info(f"Consolidated Init took {total_time:.4f}s")
+    
+    return {
+        "market": market,
+        "top_picks": picks,
+        "models": models,
+        "sync": curr_sync,
+        "perf_ms": int(total_time * 1000)
+    }
+
 @app.get("/api/top_picks")
 def get_top_picks(sort: str = "score", version: Optional[str] = None):
     picks = get_top_scores_from_db(limit=50, sort_by=sort, version=version)
     
     if picks:
-        all_stocks_list = get_all_tw_stocks()
-        name_map = {s['code']: s['name'] for s in all_stocks_list}
-        
+        # Optimized with name_map cache internally
         result = []
         for p in picks:
             last_price = p.get('last_price', 0) or 0
@@ -228,7 +257,7 @@ def get_top_picks(sort: str = "score", version: Optional[str] = None):
             
             result.append({
                 "ticker": p['ticker'],
-                "name": name_map.get(p['ticker'], p['ticker']),
+                "name": get_stock_name(p['ticker']),
                 "ai_probability": ai_prob,
                 "model_version": p.get('model_version', 'legacy'),
                 "last_sync": p.get('last_sync'),

@@ -1004,8 +1004,7 @@
             document.addEventListener('DOMContentLoaded', () => {
                 // Initial UI Update
                 updateLanguageUI();
-                loadModels();
-                pollSyncStatus();
+                initApp(); // Optimized Init
 
                 // Attach Search Listener
                 const searchInput = document.getElementById('searchInput');
@@ -1014,31 +1013,72 @@
                 }
             });
 
+            async function initApp() {
+                try {
+                    console.log("🚀 Initializing App (Consolidated)...");
+                    // Use 127.0.0.1 to avoid Windows DNS delay
+                    const res = await fetch('/api/init');
+                    const data = await res.json();
+
+                    // 1. Update Market UI
+                    updateMarketUI(data.market);
+
+                    // 2. Update Models
+                    updateModelsUI(data.models);
+
+                    // 3. Cache Top Picks for initial render
+                    if (data.top_picks) {
+                        APP_STATE.technical.data = data.top_picks;
+                        APP_STATE.technical.status = 'ready';
+                    }
+
+                    // 4. Start polling sync status
+                    pollSyncStatus();
+
+                    // 5. Initial Render
+                    renderTabFromState_or_Fetch();
+
+                    console.log("✅ App Initialized in " + data.perf_ms + "ms (Server)");
+                } catch (e) {
+                    console.error("Init App Error:", e);
+                    // Fallback to sequential if init fails
+                    loadModels();
+                    pollSyncStatus();
+                    loadMarketStatus();
+                }
+            }
+
             // --- Tabs ---
             let marketChartInstance = null;
             async function loadMarketStatus() {
                 try {
                     const res = await fetch('/api/market_status');
                     const data = await res.json();
+                    updateMarketUI(data);
+                } catch (e) { console.error("Market Load Error:", e); }
+            }
 
-                    document.getElementById('market-bull-ratio').innerText = data.bull_ratio + '%';
-                    document.getElementById('market-temp').innerText = data.market_temp;
-                    document.getElementById('market-ai-sent').innerText = data.ai_sentiment + '%';
+            function updateMarketUI(data) {
+                if (!data) return;
+                document.getElementById('market-bull-ratio').innerText = (data.bull_ratio || 0) + '%';
+                document.getElementById('market-temp').innerText = data.market_temp || 0;
+                document.getElementById('market-ai-sent').innerText = (data.ai_sentiment || 0) + '%';
 
-                    if (data.model_version) {
-                        const el = document.getElementById('model-version-mkt');
-                        if (el) el.innerText = data.model_version;
-                    }
+                if (data.model_version) {
+                    const el = document.getElementById('model-version-mkt');
+                    if (el) el.innerText = data.model_version;
+                }
 
-                    const badge = document.getElementById('market-risk-badge');
-                    badge.innerText = data.risk_level;
+                const badge = document.getElementById('market-risk-badge');
+                if (badge) {
+                    badge.innerText = data.risk_level || 'N/A';
                     badge.className = 'badge';
 
                     let strategyText = "";
-                    if (data.risk_level.includes("HIGH")) {
+                    if (data.risk_level && data.risk_level.includes("HIGH")) {
                         badge.classList.add('badge-score-low');
                         strategyText = "⚠️ **Defensive Mode**: Market is weak. Reduce position sizes and tighten stops.";
-                    } else if (data.risk_level.includes("LOW")) {
+                    } else if (data.risk_level && data.risk_level.includes("LOW")) {
                         badge.classList.add('badge-score-high');
                         strategyText = "🚀 **Aggressive Mode**: Market is bullish. Focus on breakouts and trend following.";
                     } else {
@@ -1053,11 +1093,10 @@
                             strategyEl.innerText = strategyText;
                         }
                     }
+                }
 
-                    // --- Render Chart ---
-                    renderMarketChart(data.history || []);
-
-                } catch (e) { console.error("Market Load Error:", e); }
+                // --- Render Chart ---
+                renderMarketChart(data.history || []);
             }
 
             function renderMarketChart(history) {
@@ -1310,9 +1349,13 @@
                 try {
                     const res = await fetch('/api/models');
                     const data = await res.json();
-                    APP_STATE.modelVersions = data;
-                    if (CURRENT_TAB === 'ai') updateDefinitionCard();
+                    updateModelsUI(data);
                 } catch (e) { console.error("Load Models Error:", e); }
+            }
+
+            function updateModelsUI(data) {
+                APP_STATE.modelVersions = data || [];
+                if (CURRENT_TAB === 'ai') updateDefinitionCard();
             }
 
             async function fetchData() {
