@@ -325,15 +325,16 @@ def get_stock_detail(ticker: str):
     }
 
 @app.get("/api/backtest")
-def run_backtest_simulation(days: int = 30):
+def run_backtest_simulation(days: int = 30, version: Optional[str] = None):
     """
-    Run 'Time Machine' backtest.
+    Run 'Time Machine' backtest. Supports specific model version.
     """
     try:
-        # Limit to Top 100 scores to keep it fast (uses cached DB data now)
-        result = run_time_machine(days_ago=days, limit=100)
+        # Pass version to run_time_machine
+        result = run_time_machine(days_ago=days, limit=100, version=version)
         return result
     except Exception as e:
+        logger.error(f"Backtest API Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/market_status")
@@ -433,6 +434,143 @@ def health_check():
         health_status["db"] = str(e)
         
     return health_status
+
+# ==========================================
+# V4.1 SNIPER API ENDPOINTS
+# ==========================================
+
+from core.rise_score_v2 import calculate_rise_score_v2
+from core.indicators_v2 import compute_v4_indicators
+from core.ai import predict_prob
+
+@app.get("/api/v4/sniper/candidates")
+def get_v4_candidates(limit: int = 50):
+    """
+    Returns Top Sniper Candidates using Rise Score 2.0 & AI Lite.
+    Optimized for React Frontend (StockList.tsx).
+    """
+    from core.data import get_top_scores_from_db, get_stock_name
+    
+    try:
+        # Optimized path: Fetch top 50 directly from DB if they have V4 versions
+        # We fetch a bit more to handle potential filtering
+        raw_candidates = get_top_scores_from_db(limit=limit * 2, sort_by='score')
+        
+        results = []
+        for c in raw_candidates:
+            ticker = c['ticker']
+            
+            # If the score in DB is already from a V4 version, we trust it for the list view
+            # This is significantly faster than re-calculating everything
+            if c.get('model_version', '').startswith('v4'):
+                results.append({
+                    "ticker": ticker,
+                    "name": get_stock_name(ticker),
+                    "price": safe_float(c.get('last_price', 0)),
+                    "change_percent": safe_float(c.get('change_percent', 0)),
+                    "rise_score": round(safe_float(c['total_score']), 1),
+                    "ai_prob": round(safe_float(c.get('ai_probability', 0)) * 100, 1),
+                    "trend": round(safe_float(c['trend_score']), 1),
+                    "momentum": round(safe_float(c['momentum_score']), 1),
+                    "volatility": round(safe_float(c['volatility_score']), 1),
+                    "rsi_14": 0, # Placeholders for list view if not stored in scores table
+                    "macd_diff": 0,
+                    "volume_ratio": 0,
+                    "signals": []
+                })
+                if len(results) >= limit: break
+                continue
+
+            # Fallback for old versions: On-the-fly (Slow)
+            try:
+                df = load_from_db(ticker)
+                if df.empty or len(df) < 60: continue
+                df = compute_v4_indicators(df)
+                df = calculate_rise_score_v2(df)
+                latest = df.iloc[-1]
+                ai_result = predict_prob(df) 
+                ai_prob = ai_result.get('prob', 0) if isinstance(ai_result, dict) else ai_result
+                    
+                results.append({
+                    "ticker": ticker, "name": get_stock_name(ticker),
+                    "price": safe_float(latest['close']),
+                    "change_percent": safe_float((latest['close'] - df.iloc[-2]['close']) / df.iloc[-2]['close'] * 100 if len(df) > 1 else 0),
+                    "rise_score": round(safe_float(latest['total_score_v2']), 1),
+                    "ai_prob": round(safe_float(ai_prob) * 100, 1),
+                    "trend": round(safe_float(latest['trend_score_v2']), 1),
+                    "momentum": round(safe_float(latest['momentum_score_v2']), 1),
+                    "volatility": round(safe_float(latest['volatility_score_v2']), 1),
+                    "rsi_14": round(safe_float(latest.get('rsi', 50)), 1),
+                    "macd_diff": round(safe_float(latest.get('macd_hist', 0)), 2),
+                    "volume_ratio": round(safe_float(latest.get('rel_vol', 1.0)), 2),
+                    "signals": []
+                })
+            except Exception: continue
+            if len(results) >= limit: break
+                
+        return results
+    except Exception as e:
+        logger.error(f"API ERROR: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/v4/stock/{ticker}")
+def get_v4_stock_detail(ticker: str):
+    """
+    Returns detailed analysis for SniperCard.tsx.
+    """
+    df = fetch_stock_data(ticker)
+    if df.empty:
+        raise HTTPException(status_code=404, detail="Stock not found")
+        
+    # V4 Pipeline
+    df = compute_v4_indicators(df)
+    df = calculate_rise_score_v2(df)
+    
+    latest = df.iloc[-1]
+    
+    # AI
+    ai_result = predict_prob(df)
+    ai_prob = 0.0
+    if isinstance(ai_result, dict):
+        ai_prob = ai_result.get('prob', 0)
+    elif isinstance(ai_result, float):
+        ai_prob = ai_result
+
+    # Generate "AI Analyst" Text
+    analyst_text = []
+    if latest['trend_alignment'] == 1:
+        analyst_text.append("✅ **Strong Uptrend**: Price is consistently above SMA20 & SMA60.")
+    elif latest['sma20_slope'] > 0:
+        analyst_text.append("🌤️ **Recovering**: Price is building momentum above SMA20.")
+        
+    if 40 <= latest['rsi'] <= 70:
+        analyst_text.append("⚡ **Momentum**: RSI is in the bullish zone (40-70).")
+    elif latest['rsi'] > 80:
+        analyst_text.append("⚠️ **Overheated**: RSI indicates overbought territory.")
+        
+    if latest['is_squeeze']:
+        analyst_text.append("💥 **Squeeze Alert**: Low volatility detected, expecting a major move.")
+    elif latest['rel_vol'] > 1.5:
+        analyst_text.append("📢 **Volume Spike**: Heavy trading activity detected.")
+
+    return {
+        "ticker": ticker,
+        "name": get_stock_name(ticker),
+        "price": latest['close'],
+        "rise_score_breakdown": {
+            "total": round(latest['total_score_v2'], 1),
+            "trend": round(latest['trend_score_v2'], 1),
+            "momentum": round(latest['momentum_score_v2'], 1),
+            "volatility": round(latest['volatility_score_v2'], 1)
+        },
+        "ai_probability": round(ai_prob * 100, 1),
+        "analyst_summary": " ".join(analyst_text) if analyst_text else "Market is neutral. Watch for setup signals.",
+        "signals": {
+            "squeeze": bool(latest['is_squeeze']),
+            "golden_cross": bool(latest['kd_cross_flag']),
+            "volume_spike": bool(latest['rel_vol'] > 1.5)
+        }
+    }
 
 if __name__ == "__main__":
     import argparse

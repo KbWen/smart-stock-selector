@@ -260,8 +260,9 @@ def fetch_stock_data(ticker: str, days: int = 365, force_download: bool = False)
         df = load_from_db(ticker, days)
         if not df.empty:
             last_date = df.iloc[-1]['date']
-            # If data is fresh (updated today or yesterday), return it
-            if datetime.now() - last_date < timedelta(hours=18): 
+            # If data is fresh (updated within last 24 hours), return it
+            # V4 Optimization: Increased from 18h to 24h to reduce morning latency
+            if datetime.now() - last_date < timedelta(hours=24): 
                 return df
 
     # 2. Fetch from YFinance with Retry Logic (Exponential Backoff)
@@ -300,15 +301,21 @@ def save_score_to_db(ticker, score_data, ai_prob=None, model_version=None):
     ticker = standardize_ticker(ticker)
     conn = get_db_connection()
     cursor = conn.cursor()
+    # v4 compatibility mapping (v2 keys -> v1 columns)
+    total = score_data.get('total_score_v2') if 'total_score_v2' in score_data else score_data.get('total_score', 0)
+    trend = score_data.get('trend_score_v2') if 'trend_score_v2' in score_data else score_data.get('trend_score', 0)
+    momentum = score_data.get('momentum_score_v2') if 'momentum_score_v2' in score_data else score_data.get('momentum_score', 0)
+    volatility = score_data.get('volatility_score_v2') if 'volatility_score_v2' in score_data else score_data.get('volatility_score', 0)
+
     cursor.execute('''
         INSERT OR REPLACE INTO stock_scores (ticker, total_score, trend_score, momentum_score, volatility_score, last_price, change_percent, ai_probability, model_version, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ''', (
         ticker, 
-        score_data['total_score'],
-        score_data['trend_score'],
-        score_data['momentum_score'],
-        score_data['volatility_score'],
+        total,
+        trend,
+        momentum,
+        volatility,
         score_data.get('last_price', 0),
         score_data.get('change_percent', 0),
         ai_prob,

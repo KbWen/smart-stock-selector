@@ -352,25 +352,50 @@ def train_and_save(all_dfs):
     print("=" * 60)
 
 
-def predict_prob(df):
-    if not os.path.exists(MODEL_PATH):
-        return None
-    
+_model_cache = {}
+
+def predict_prob(df, version: Optional[str] = None):
+    """
+    Predicts buy probability. Supports specific version loading with caching.
+    """
     global CURRENT_MODEL_VERSION
-    try:
-        data = joblib.load(MODEL_PATH)
-        if isinstance(data, dict) and 'version' in data:
-            CURRENT_MODEL_VERSION = data['version']
-            model_data = data['ensemble']
-        else:
-            CURRENT_MODEL_VERSION = "legacy"
-            model_data = data
-    except Exception:
-        return None
+    
+    # 1. Determine Path
+    target_path = MODEL_PATH
+    if version and version != "latest":
+        # Extract timestamp from version tag (e.g. v4.20260213_2240 -> 20260213_2240)
+        ts = version.split('.')[-1]
+        base_dir = os.path.dirname(MODEL_PATH)
+        name_part = os.path.splitext(os.path.basename(MODEL_PATH))[0]
+        # Match pattern like model_sniper_20260213_2240.pkl
+        target_path = os.path.join(base_dir, f"{name_part}_{ts}.pkl")
+        if not os.path.exists(target_path):
+            target_path = MODEL_PATH # Fallback
+
+    # 2. Load Model (with Cache)
+    if target_path in _model_cache:
+        model_data_all = _model_cache[target_path]
+    else:
+        if not os.path.exists(target_path):
+            return None
+        try:
+            model_data_all = joblib.load(target_path)
+            _model_cache[target_path] = model_data_all
+        except Exception:
+            return None
+
+    # 3. Extract Model components
+    if isinstance(model_data_all, dict) and 'ensemble' in model_data_all:
+        CURRENT_MODEL_VERSION = model_data_all.get('version', 'unknown')
+        model_data = model_data_all['ensemble']
+    else:
+        CURRENT_MODEL_VERSION = "legacy"
+        model_data = model_data_all
     
     if df.empty or len(df) < 60:
         return None
     
+    # --- Feature Extraction ---
     df = df.copy()
     required = ['rsi', 'macd', 'macd_signal', 'sma_20', 'sma_60', 'k', 'd', 'bb_width', 'bb_percent']
     for col in required:
@@ -384,6 +409,7 @@ def predict_prob(df):
     
     vol_ma = df['volume'].rolling(20).mean().iloc[-1]
     
+    # ATR
     high_low = df['high'] - df['low']
     high_close = np.abs(df['high'] - df['close'].shift())
     low_close = np.abs(df['low'] - df['close'].shift())
@@ -403,9 +429,9 @@ def predict_prob(df):
         'price_vs_sma60': (latest['close'] - latest['sma_60']) / sma60,
         'sma20_slope': (latest['sma_20'] - prev5['sma_20']) / (prev5['sma_20'] if prev5['sma_20'] != 0 else 1),
         'sma60_slope': (latest['sma_60'] - prev5['sma_60']) / (prev5['sma_60'] if prev5['sma_60'] != 0 else 1),
-        'return_1d': (latest['close'] - prev['close']) / prev['close'] if prev['close'] != 0 else 0,
-        'return_5d': (latest['close'] - prev5['close']) / prev5['close'] if prev5['close'] != 0 else 0,
-        'return_10d': (latest['close'] - prev10['close']) / prev10['close'] if prev10['close'] != 0 else 0,
+        'return_1d': (latest['close'] - prev['close']) / (prev['close'] if prev['close'] != 0 else 1),
+        'return_5d': (latest['close'] - prev5['close']) / (prev5['close'] if prev5['close'] != 0 else 1),
+        'return_10d': (latest['close'] - prev10['close']) / (prev10['close'] if prev10['close'] != 0 else 1),
         'vol_ratio': latest['volume'] / vol_ma if vol_ma != 0 else 1,
         'atr_norm': atr / close,
         'bb_width': latest['bb_width'],
@@ -415,7 +441,6 @@ def predict_prob(df):
         'kd_diff': latest['k'] - latest['d'],
     }
     
-    # --- Add Rise Scores for Prediction ---
     from core.analysis import calculate_rise_score
     scores = calculate_rise_score(df)
     features.update({
@@ -430,45 +455,22 @@ def predict_prob(df):
     
     try:
         if isinstance(model_data, dict):
-            # Ensemble (Manual Voting)
-            # Result is now multi-class [0, 1, 2]
+            # Ensemble Voting
             probs = {}
             total_prob = 0
             count = 0
             for name, clf in model_data.items():
                 p_array = clf.predict_proba(X_single)[0]
-                # p_array order: [Prob(0), Prob(1), Prob(2)] if all classes exist in training
-                # To be safe, check length.
-                if len(p_array) == 3:
-                    # Combined probability of being a "Buy" or "Strong Buy"
-                    win_p = float(p_array[1] + p_array[2])
-                elif len(p_array) == 2:
-                    win_p = float(p_array[1])
-                else:
-                    win_p = 0.0
-                
+                win_p = float(np.sum(p_array[1:])) if len(p_array) > 1 else 0.0
                 probs[name] = win_p
                 total_prob += win_p
                 count += 1
-            
-            final_win_prob = total_prob / count if count > 0 else 0
-            
-            return {
-                "prob": final_win_prob,
-                "details": probs
-            }
+            return {"prob": total_prob / count if count > 0 else 0, "details": probs}
         else:
-            # Legacy single model
-            prob_vec = model_data.predict_proba(X_single)[0]
-            if len(prob_vec) >= 2:
-                win_prob = float(np.sum(prob_vec[1:]))
-            else:
-                win_prob = 0.0
-            return {
-                "prob": win_prob,
-                "details": {"legacy": win_prob}
-            }
-            
+            # Single model
+            p_vec = model_data.predict_proba(X_single)[0]
+            win_p = float(np.sum(p_vec[1:])) if len(p_vec) > 1 else 0.0
+            return {"prob": win_p, "details": {"legacy": win_p}}
     except Exception as e:
         print(f"Prediction Error: {e}")
         return None

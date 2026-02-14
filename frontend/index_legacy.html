@@ -1,0 +1,2062 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Stock Selector | AI Edition</title>
+    <!-- External Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --text-main: #f8fafc;
+            --text-muted: #cbd5e1;
+            /* Optimized for higher contrast */
+            --accent: #38bdf8;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --ai-color: #a855f7;
+            --border: #334155;
+        }
+
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+
+        /* Header & Controls */
+        header {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--border);
+            gap: 15px;
+        }
+
+        h1 {
+            font-size: 2rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--accent) 0%, #818cf8 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin: 0;
+            letter-spacing: -1px;
+        }
+
+        .controls {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        /* Buttons */
+        .btn {
+            background-color: var(--card-bg);
+            color: var(--text-main);
+            padding: 10px 18px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        tr:hover {
+            background-color: rgba(255, 255, 255, 0.05);
+        }
+
+        tr.selected-row {
+            background-color: rgba(69, 183, 209, 0.15);
+            border-left: 3px solid var(--accent);
+        }
+
+        .btn:hover {
+            background-color: #273548;
+            transform: translateY(-1px);
+        }
+
+        .btn-primary {
+            background-color: var(--accent);
+            color: #0f172a;
+            border-color: var(--accent);
+        }
+
+        .btn-primary:hover {
+            opacity: 0.9;
+            background-color: var(--accent);
+        }
+
+        .btn-ai {
+            background-color: var(--ai-color);
+            color: white;
+            border-color: var(--ai-color);
+        }
+
+        .btn-ai:hover {
+            opacity: 0.9;
+            background-color: var(--ai-color);
+        }
+
+        /* Search */
+        .search-box {
+            position: relative;
+        }
+
+        .search-input {
+            background: #1e293b;
+            border: 1px solid var(--border);
+            padding: 10px 16px;
+            border-radius: 8px;
+            color: white;
+            width: 250px;
+            font-size: 0.95rem;
+            transition: border-color 0.2s;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .search-results {
+            position: absolute;
+            top: 110%;
+            left: 0;
+            width: 100%;
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            max-height: 250px;
+            overflow-y: auto;
+            z-index: 20;
+            display: none;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+        }
+
+        .search-item {
+            padding: 12px 16px;
+            cursor: pointer;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .search-item:hover {
+            background: #273548;
+        }
+
+        /* Sync Progress */
+        .progress-bar {
+            height: 4px;
+            background: #334155;
+            width: 100%;
+            margin-top: 5px;
+            border-radius: 2px;
+            overflow: hidden;
+            display: none;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: var(--success);
+            width: 0%;
+            transition: width 0.3s;
+        }
+
+        #syncStatus {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-bottom: 20px;
+            text-align: right;
+            min-height: 1.2em;
+        }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .tab-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            font-size: 1.1rem;
+            font-weight: 600;
+            padding: 10px 4px;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .tab-btn.active {
+            color: var(--text-main);
+        }
+
+        .tab-btn.active::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 3px;
+            background: var(--accent);
+            /* Default */
+            border-radius: 2px;
+            transition: background-color 0.3s;
+        }
+
+        /* Specific Tab Underlines */
+        .tab-btn[data-target="technical"].active::after {
+            background: var(--success);
+        }
+
+        .tab-btn[data-target="ai"].active::after {
+            background: var(--ai-color);
+        }
+
+        .tab-btn[data-target="market"].active::after {
+            background: #38bdf8;
+        }
+
+        .tab-btn[data-target="smart-scan"].active::after {
+            background: var(--warning);
+        }
+
+        .tab-btn[data-target="backtest"].active::after {
+            background: #f472b6;
+        }
+
+        .tab-btn[data-target="technical"]:hover {
+            color: var(--success);
+        }
+
+        .tab-btn[data-target="ai"]:hover {
+            color: var(--ai-color);
+        }
+
+        .tab-btn[data-target="market"]:hover {
+            color: #38bdf8;
+        }
+
+        .tab-btn[data-target="smart-scan"]:hover {
+            color: var(--warning);
+        }
+
+        .tab-btn[data-target="backtest"]:hover {
+            color: #f472b6;
+        }
+
+        /* Card & Table */
+        .card {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            border: 1px solid var(--border);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        thead th {
+            text-align: left;
+            padding: 15px 20px;
+            color: var(--text-muted);
+            border-bottom: 1px solid var(--border);
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            background: #182234;
+        }
+
+        tbody td {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border);
+            vertical-align: middle;
+        }
+
+        tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        tbody tr:hover {
+            background-color: #273548;
+            cursor: pointer;
+        }
+
+        /* Badges */
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-weight: 700;
+            font-size: 0.85rem;
+            min-width: 40px;
+        }
+
+        .badge-score-high {
+            background: rgba(16, 185, 129, 0.15);
+            color: var(--success);
+        }
+
+        .badge-score-mid {
+            background: rgba(245, 158, 11, 0.15);
+            color: var(--warning);
+        }
+
+        .badge-score-low {
+            background: rgba(239, 68, 68, 0.15);
+            color: var(--danger);
+        }
+
+        .badge-ai {
+            background: rgba(168, 85, 247, 0.15);
+            color: var(--ai-color);
+            border: 1px solid rgba(168, 85, 247, 0.3);
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(4px);
+            justify-content: center;
+            align-items: center;
+            z-index: 50;
+        }
+
+        .modal.active {
+            display: flex;
+            animation: fadeIn 0.2s;
+        }
+
+        .modal-content {
+            background: var(--card-bg);
+            padding: 30px;
+            border-radius: 16px;
+            width: 90%;
+            max-width: 650px;
+            max-height: 85vh;
+            /* NEW: Max height */
+            overflow-y: auto;
+            /* NEW: Scrollable */
+            position: relative;
+            border: 1px solid var(--border);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+        }
+
+        .close-modal {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            cursor: pointer;
+            color: var(--text-muted);
+            font-size: 1.5rem;
+            transition: color 0.2s;
+        }
+
+        .close-modal:hover {
+            color: white;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-top: 25px;
+        }
+
+        .stat-box {
+            background: #273548;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 800;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            color: var(--text-muted);
+            font-size: 0.85rem;
+        }
+
+        /* AI Box */
+        .ai-box {
+            background: linear-gradient(135deg, rgba(168, 85, 247, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
+            border: 1px solid rgba(168, 85, 247, 0.3);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        .ai-confidence-high {
+            color: var(--success);
+        }
+
+        .ai-confidence-med {
+            color: var(--warning);
+        }
+
+        .ai-confidence-low {
+            color: var(--danger);
+        }
+
+        .chart-container {
+            height: 180px;
+            display: flex;
+            align-items: flex-end;
+            gap: 4px;
+            padding-bottom: 5px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .chart-bar {
+            flex: 1;
+            background: #64748b;
+            opacity: 0.6;
+            border-radius: 2px 2px 0 0;
+            position: relative;
+        }
+
+        .chart-bar:hover {
+            opacity: 1;
+            background: var(--accent);
+        }
+
+        .chart-bar:hover::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: white;
+            color: black;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            white-space: nowrap;
+            margin-bottom: 5px;
+            z-index: 10;
+        }
+
+        .loading {
+            padding: 50px;
+            text-align: center;
+            color: var(--text-muted);
+        }
+
+        /* Skeleton Loading */
+        .skeleton {
+            background: linear-gradient(90deg, #1e293b 25%, #2d3e5a 50%, #1e293b 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s infinite;
+            border-radius: 4px;
+        }
+
+        @keyframes shimmer {
+            0% {
+                background-position: 200% 0;
+            }
+
+            100% {
+                background-position: -200% 0;
+            }
+        }
+
+        .skeleton-text {
+            height: 16px;
+            margin-bottom: 8px;
+        }
+
+        .skeleton-title {
+            height: 24px;
+            margin-bottom: 15px;
+            width: 60%;
+        }
+
+        /* Toasts */
+        #toastContainer {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .toast {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-left: 4px solid var(--accent);
+            padding: 12px 20px;
+            border-radius: 8px;
+            min-width: 200px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+            animation: slideInRight 0.3s forwards;
+        }
+
+        @keyframes slideInRight {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .toast-success {
+            border-left-color: var(--success);
+        }
+
+        .toast-error {
+            border-left-color: var(--danger);
+        }
+
+        /* Language Toggle */
+        .lang-toggle {
+            display: flex;
+            background: #1e293b;
+            border-radius: 20px;
+            padding: 2px;
+            border: 1px solid var(--border);
+        }
+
+        .lang-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            padding: 4px 12px;
+            font-size: 0.75rem;
+            cursor: pointer;
+            border-radius: 18px;
+            font-weight: bold;
+        }
+
+        .lang-btn.active {
+            background: var(--accent);
+            color: #0f172a;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: scale(0.95);
+            }
+
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <h1>Smart Stock Selector <span
+                    style="font-size:0.4em; color:var(--ai-color); vertical-align:super; border:1px solid var(--ai-color); padding:1px 4px; border-radius:4px;">BETA
+                    2.0</span></h1>
+
+            <div class="controls">
+                <div class="search-box">
+                    <input type="text" class="search-input" placeholder="Search Ticker / Name..." id="searchInput">
+                    <div class="search-results" id="searchResults"></div>
+                </div>
+                <div class="lang-toggle" style="margin-right: 10px;">
+                    <button class="lang-btn" id="lang-tw" onclick="setLang('tw')">中文</button>
+                    <button class="lang-btn" id="lang-en" onclick="setLang('en')">EN</button>
+                </div>
+                <button class="btn btn-primary" onclick="triggerSync()">
+                    <span id="label-sync-icon">🔄</span> <span id="label-sync-text">Sync Data</span>
+                </button>
+                <button class="btn" onclick="fetchData()">
+                    <span id="label-refresh-icon">⚡</span> <span id="label-refresh-text">Refresh</span>
+                </button>
+            </div>
+        </header>
+
+        <div id="toastContainer"></div>
+
+        <div class="progress-bar" id="progressBar">
+            <div class="progress-fill" id="progressFill"></div>
+        </div>
+        <div id="syncStatus"></div>
+
+        <!-- TABS -->
+        <div class="tabs">
+            <button class="tab-btn active" data-target="technical" onclick="switchTab('technical')">🔥 Technical
+                Picks</button>
+            <button class="tab-btn" data-target="ai" onclick="switchTab('ai')">🤖 AI Ranking (Top 50)</button>
+            <button class="tab-btn" data-target="smart-scan" onclick="switchTab('smart-scan')">🔔 Smart Scans</button>
+            <button class="tab-btn" data-target="market" onclick="switchTab('market')">📊 Market Pulse</button>
+            <button class="tab-btn" data-target="backtest" onclick="switchTab('backtest')">🧪 Backtest Lab</button>
+        </div>
+
+        <!-- NEW: Definition / Transparency Card -->
+        <div id="definition-card"
+            style="background: rgba(56, 189, 248, 0.05); border: 1px solid rgba(56, 189, 248, 0.2); border-radius: 12px; padding: 15px; margin-bottom: 20px; font-size: 0.85rem; color: var(--text-muted); line-height: 1.5;">
+            <!-- Filled by JS based on Tab -->
+        </div>
+
+        <!-- NEW: Sniper Manual (Practical Tips) -->
+        <div class="card" style="margin-bottom: 25px; border-left: 4px solid var(--success);">
+            <!-- MAIN TABLE -->
+            <section class="card">
+                <div id="table-container">
+                    <div class="loading">Loading...</div>
+                </div>
+            </section>
+        </div>
+
+        <!-- NEW: Market Dashboard Tab -->
+        <div id="market" class="tab-content" style="display: none;">
+            <div class="card" style="padding: 25px;">
+                <h3
+                    style="margin-top:0; border-bottom:1px solid var(--border); padding-bottom:15px; display:flex; justify-content:space-between;">
+                    <span id="label-market-title">Market Risk Analysis</span>
+                    <span class="badge" id="market-risk-badge">NEUTRAL</span>
+                </h3>
+
+                <!-- Market Gauges Grid -->
+                <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:20px; margin-bottom:30px;">
+                    <!-- ... existing stats ... -->
+                    <div class="stat-box" style="text-align:center;">
+                        <div style="font-size:1.8rem; font-weight:bold; color:var(--accent)" id="market-bull-ratio">--
+                        </div>
+                        <div style="color:var(--text-muted); font-size:0.8rem;">🐂 Bull/Bear Ratio</div>
+                        <div style="font-size:0.7rem; color:var(--text-dim);">% of stocks with Trend Score > 3</div>
+                    </div>
+                    <div class="stat-box" style="text-align:center;">
+                        <div style="font-size:1.8rem; font-weight:bold; color:var(--danger)" id="market-temp">--</div>
+                        <div style="color:var(--text-muted); font-size:0.8rem;">🌡️ Market Temp</div>
+                        <div style="font-size:0.7rem; color:var(--text-dim);">Avg Momentum (Top 100)</div>
+                    </div>
+                    <div class="stat-box" style="text-align:center;">
+                        <div style="font-size:1.8rem; font-weight:bold; color:var(--ai-color)" id="market-ai-sent">--
+                        </div>
+                        <div style="color:var(--text-muted); font-size:0.8rem;">🤖 AI Sentiment</div>
+                        <div style="font-size:0.7rem; color:var(--text-dim);">Avg AI Prob (Top 50)</div>
+                    </div>
+                </div>
+
+                <!-- Market Chart Section -->
+                <div style="margin-bottom:30px; padding:15px; background:rgba(255,255,255,0.02); border-radius:8px;">
+                    <h4 style="margin-top:0; color:var(--text-muted); font-size:0.9rem;" id="label-chart-title">📈
+                        Market Trend (30d)</h4>
+                    <div style="height:250px; position:relative;">
+                        <canvas id="marketChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="stat-box"
+                    style="background:rgba(var(--accent-rgb), 0.05); border:1px dashed var(--accent);">
+                    <div id="market-strategy-text" style="line-height:1.6; color:var(--text-main);">Analyzing market
+                        conditions...</div>
+                </div>
+                <span>📊 Market Risk Analysis</span>
+                <span id="market-risk-badge" class="badge" style="font-size: 1rem;">LOADING</span>
+                </h3>
+
+                <div class="stats-grid" style="grid-template-columns: repeat(3, 1fr); gap: 20px;">
+                    <div class="stat-box">
+                        <div class="stat-value" id="market-bull-ratio">--%</div>
+                        <div class="stat-label">🐂 Bull/Bear Ratio</div>
+                        <small style="color:var(--text-muted); display:block; margin-top:5px;">% of stocks with Trend
+                            Score > 3</small>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-value" id="market-temp">--</div>
+                        <div class="stat-label">🌡️ Market Temp</div>
+                        <small style="color:var(--text-muted); display:block; margin-top:5px;">Avg Momentum (Top
+                            100)</small>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-value" id="market-ai-sent">--%</div>
+                        <div class="stat-label">🤖 AI Sentiment</div>
+                        <small style="color:var(--text-muted); display:block; margin-top:5px;">Avg AI Prob (Top
+                            50)</small>
+                    </div>
+                </div>
+
+                <div style="margin-top: 25px; background: rgba(255,255,255,0.03); padding: 15px; border-radius: 8px;">
+                    <h4 style="margin:0 0 10px 0;">🛡️ Risk Strategy Recommendation</h4>
+                    <p id="market-strategy-text" style="margin:0; color: var(--text-muted); line-height: 1.6;">
+                        Analyzing market conditions...
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- DETAILS MODAL -->
+        <div class="modal" id="detailsModal">
+            <div class="modal-content">
+                <span class="close-modal" onclick="closeModal()">&times;</span>
+
+                <div class="modal-header">
+                    <div>
+                        <h2 id="modalTicker" style="margin:0">Ticker</h2>
+                        <div id="modalPrice" style="font-size:1.5rem; font-weight:bold; margin-top:5px;">$0.00</div>
+                    </div>
+                    <div class="badge" id="modalScoreBadge" style="font-size:1.5rem; padding:10px 20px;">0</div>
+                </div>
+
+                <div class="chart-container" id="modalChart"></div>
+
+                <div class="ai-box">
+                    <h4 style="margin:0 0 10px 0; color:var(--ai-color)">🎯 AI Sniper Prediction (20-Day, 3:1 R/R)</h4>
+                    <div id="modalAI" style="font-size:2rem; font-weight:800; margin-bottom:5px;">0%</div>
+                    <div id="modalAIConf" style="font-size:0.9rem; margin-bottom:10px;">Waiting...</div>
+
+                    <!-- NEW: AI Consensus Details -->
+                    <div id="modal-ai-breakdown"
+                        style="display: flex; gap: 8px; justify-content: center; margin: 15px 0; flex-wrap: wrap;">
+                    </div>
+
+                    <div id="modalAITargets" style="display:flex; justify-content:center; gap:30px; margin:10px 0">
+                        <div><span style="color:var(--success)">🎯 Target:</span> <span id="modalTarget">$0</span></div>
+                        <div><span style="color:var(--danger)">🛡️ Stop:</span> <span id="modalStop">$0</span></div>
+                    </div>
+                    <small style="color:var(--text-muted)">Win = Hit +15% before -5% within 20 days (3:1 R/R)</small>
+                </div>
+
+                <div class="stat-box" style="text-align: left; margin-bottom: 20px;">
+                    <h4 style="margin:0 0 10px 0; color:white;">🤖 AI Analyst Report</h4>
+                    <div id="modal-analysis" style="font-size: 0.9rem; line-height: 1.6; color: var(--text-muted);">
+                        Loading report...
+                    </div>
+                </div>
+
+                <div class="stats-grid" id="modalStats">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+        </div>
+
+        <!-- MANUAL MODAL -->
+        <div class="modal" id="manualModal">
+            <div class="modal-content" style="max-width: 600px;">
+                <span class="close-modal" onclick="closeManualModal()">&times;</span>
+                <div class="modal-header">
+                    <h2>🤖 Sniper Strategy Manual</h2>
+                </div>
+                <div style="padding: 10px 0; color: var(--text-muted); line-height: 1.6;">
+                    <p style="margin-bottom:15px;" id="manual-desc-modal"></p>
+
+                    <div
+                        style="background:rgba(255,255,255,0.03); padding:15px; border-radius:8px; margin-bottom:10px;">
+                        <b style="color: var(--success); font-size:1.1em;" id="tip-1-title-modal"></b>
+                        <div id="tip-1-desc-modal" style="margin-top:5px;"></div>
+                    </div>
+
+                    <div
+                        style="background:rgba(255,255,255,0.03); padding:15px; border-radius:8px; margin-bottom:10px;">
+                        <b style="color: var(--accent); font-size:1.1em;" id="tip-2-title-modal"></b>
+                        <div id="tip-2-desc-modal" style="margin-top:5px;"></div>
+                    </div>
+
+                    <div style="background:rgba(255,255,255,0.03); padding:15px; border-radius:8px;">
+                        <b style="color: var(--danger); font-size:1.1em;" id="tip-3-title-modal"></b>
+                        <div id="tip-3-desc-modal" style="margin-top:5px;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            let CURRENT_TAB = 'technical'; // 'technical' or 'ai'
+            let abortController = null; // Global controller for cancelling requests
+            let SELECTED_TICKER = null; // Track selected stock
+            let searchTimeout = null; // Debounce timer
+
+            // Global State for Caching & Persistence
+            const APP_STATE = {
+                backtest: { status: 'idle', data: null, html: null },
+                smartScan: { status: 'idle', data: null },
+                ai: { status: 'idle', data: null },
+                technical: { status: 'idle', data: null },
+                lang: localStorage.getItem('lang') || 'tw',
+                selectedVersion: '', // Selected training version v4.x
+                modelVersions: [],   // Available versions from API
+                sortCol: null,
+                sortDir: 'desc'
+            };
+
+            const TRANSLATIONS = {
+                tw: {
+                    title: "Smart Stock Selector",
+                    sync: "同步數據",
+                    refresh: "重新整理",
+                    tab_tech: "🔥 技術面強勢",
+                    tab_ai: "🤖 AI 回測排名",
+                    tab_scan: "🔔 智慧篩選",
+                    tab_market: "📊 大盤分析",
+                    tab_backtest: "🧪 回測實驗室",
+                    loading: "載入中...",
+                    searching: "掃描市場中...",
+                    no_results: "查無標的。請先同步數據。",
+                    sync_done: "同步完成！",
+                    syncing: "同步中...",
+                    col_ticker: "代號",
+                    col_name: "名稱",
+                    col_price: "股價",
+                    col_change: "漲跌",
+                    col_target: "目標",
+                    col_stop: "停損",
+                    col_rise: "總分",
+                    col_signal: "訊號",
+                    col_ai: "AI 勝率",
+                    col_trend: "趨勢",
+                    col_momt: "動能",
+                    btn_run_sim: "🚀 執行 30 天模擬",
+                    search_hint: "搜尋代號 / 名稱...",
+                    manual_title: "🤖 Ensemble AI 預測邏輯 (Sniper Strategy)",
+                    manual_desc: "透過三個異質 ML 模型投票產生的共識勝率預測。",
+                    tip_1_title: "1. AI 共識",
+                    tip_1_desc: "三模型均 > 60% 時訊號最強。",
+                    tip_2_title: "2. 關聯性",
+                    tip_2_desc: "AI 高分 + Rise Score 高分 = 強勢突破。",
+                    tip_3_title: "3. 大盤風險",
+                    tip_3_desc: "若大盤走空，所有勝率下修 10-20%。",
+                    backtest_title: "🧪 Time Machine 回測",
+                    backtest_desc: "使用過去的數據來驗證 AI 模型的實戰表現。這可以回答：'如果我 30 天前跟著 AI 買，現在賺多少？'",
+                    rise_score_title: "🔥 Rise Score (啟動分數)",
+                    rise_score_desc: "基於 Trend(40%) + Momentum(30%) + Volatility(30%) 權重計算的技術面總分。",
+                    tab_market_desc: "即時分析市場寬度、動能與 AI 情緒，判斷當前大盤風險等級。",
+                    model_select_label: "🤖 訓練版本：",
+                    btn_manual: "策略手冊",
+                    search_db: "🔍 搜尋整個資料庫",
+                    no_local_results: "本地查無此代號。是否搜尋全台股？",
+                    backtest_loading: "⏳ 正在穿越時空... (計算中，請稍候 10-20 秒)",
+                    chart_title: "📈 大盤趨勢追蹤 (30日)",
+                    chart_bull_ratio: "多頭佔比 (%)",
+                    chart_ai_sent: "AI 情緒 (%)",
+                    chart_market_temp: "市場溫度 (0-100)"
+                },
+                en: {
+                    title: "Smart Stock Selector",
+                    sync: "Sync Data",
+                    refresh: "Refresh",
+                    tab_tech: "🔥 Technical",
+                    tab_ai: "🤖 AI Ranking",
+                    tab_scan: "🔔 Smart Scans",
+                    tab_market: "📊 Market Pulse",
+                    tab_backtest: "🧪 Backtest",
+                    loading: "Loading...",
+                    searching: "Scanning Market...",
+                    no_results: "No stocks found. Try syncing data first.",
+                    sync_done: "Sync Done!",
+                    syncing: "Syncing...",
+                    col_ticker: "Ticker",
+                    col_name: "Name",
+                    col_price: "Price",
+                    col_change: "Change",
+                    model_select_label: "🤖 Model Version:",
+                    btn_manual: "Manual",
+                    search_db: "🔍 Search Database",
+                    no_local_results: "Not found locally. Search entire market?",
+                    col_target: "Target",
+                    col_stop: "Stop",
+                    col_rise: "Rise",
+                    col_signal: "Signal",
+                    col_ai: "AI Prob",
+                    col_trend: "Trend",
+                    col_momt: "Momt",
+                    btn_run_sim: "🚀 Run 30-Day Simulation",
+                    search_hint: "Search Ticker / Name...",
+                    manual_title: "🤖 Ensemble AI Logic (Sniper Strategy)",
+                    manual_desc: "Consensus win probability based on three heterogeneous ML models.",
+                    tip_1_title: "1. Consensus",
+                    tip_1_desc: "Signals are strongest when all three models > 60%.",
+                    tip_2_title: "2. Correlation",
+                    tip_2_desc: "High AI prob + High Rise Score = Strong Breakout.",
+                    tip_3_title: "3. Market Risk",
+                    tip_3_desc: "If market is bearish, win rates drop by 10-20%.",
+                    backtest_title: "🧪 Time Machine Backtest",
+                    backtest_desc: "Verify AI performance by simulating a buy 30 days ago.",
+                    rise_score_title: "🔥 Rise Score (Launch Score)",
+                    rise_score_desc: "Technical score based on Trend(40%) + Momentum(30%) + Volatility(30%).",
+                    tab_market_desc: "Real-time analysis of market breadth, momentum, and AI sentiment.",
+                    model_select_label: "🤖 Model:",
+                    model_consensus: "Ensemble Consensus",
+                    model_gb: "Gradient Boosting",
+                    model_rf: "Random Forest",
+                    model_mlp: "Deep Learning (MLP)",
+                    backtest_loading: "⏳ Traveling back 30 days... (Processing, please wait 10-20s)",
+                    chart_title: "📈 Market Trend (30d)",
+                    chart_bull_ratio: "Bull Ratio (%)",
+                    chart_ai_sent: "AI Sentiment (%)",
+                    chart_market_temp: "Market Temp"
+                }
+            };
+
+            function i18n(key) {
+                return TRANSLATIONS[APP_STATE.lang][key] || key;
+            }
+
+            function setLang(l) {
+                APP_STATE.lang = l;
+                localStorage.setItem('lang', l);
+                updateLanguageUI();
+                // Rerender current tab
+                renderTabFromState_or_Fetch();
+            }
+
+            function updateLanguageUI() {
+                // Lang buttons
+                document.querySelectorAll('.lang-btn').forEach(b => {
+                    const id = b.id;
+                    if (id === `lang-${APP_STATE.lang}`) b.classList.add('active');
+                    else b.classList.remove('active');
+                });
+
+                // Global Labels
+                const sLabel = document.getElementById('label-sync-text');
+                if (sLabel) sLabel.innerText = i18n('sync');
+
+                const rLabel = document.getElementById('label-refresh-text');
+                if (rLabel) rLabel.innerText = i18n('refresh');
+
+                const searchInput = document.getElementById('searchInput');
+                if (searchInput) searchInput.placeholder = i18n('search_hint');
+
+                // Tab Buttons
+                const tabButtons = document.querySelectorAll('.tab-btn');
+                if (tabButtons.length >= 5) {
+                    tabButtons[0].innerText = i18n('tab_tech');
+                    tabButtons[1].innerText = i18n('tab_ai');
+                    tabButtons[2].innerText = i18n('tab_scan');
+                    tabButtons[3].innerText = i18n('tab_market');
+                    tabButtons[4].innerText = i18n('tab_backtest');
+                }
+
+                // Dynamic Market Labels
+                const mTitle = document.getElementById('label-market-title');
+                if (mTitle) mTitle.innerText = i18n('tab_market');
+                const cTitle = document.getElementById('label-chart-title');
+                if (cTitle) cTitle.innerText = i18n('chart_title');
+
+                const g1 = document.getElementById('label-market-bull-ratio');
+                if (g1) g1.innerText = '🐂 ' + i18n('chart_bull_ratio');
+                const g3 = document.getElementById('label-market-ai-sent');
+                if (g3) g3.innerText = '🤖 ' + i18n('chart_ai_sent');
+
+                // Refresh the definition card for the current tab
+                updateDefinitionCard();
+            }
+
+            function showToast(msg, type = 'accent') {
+                const container = document.getElementById('toastContainer');
+                const toast = document.createElement('div');
+                toast.className = `toast toast-${type}`;
+                toast.innerText = msg;
+                container.appendChild(toast);
+                setTimeout(() => {
+                    toast.style.opacity = '0';
+                    setTimeout(() => toast.remove(), 300);
+                }, 3000);
+            }
+
+            // --- Init ---
+            document.addEventListener('DOMContentLoaded', () => {
+                // Initial UI Update
+                updateLanguageUI();
+                initApp(); // Optimized Init
+
+                // Attach Search Listener
+                const searchInput = document.getElementById('searchInput');
+                if (searchInput) {
+                    searchInput.addEventListener('input', (e) => handleSearch(e.target.value));
+                }
+            });
+
+            async function initApp() {
+                try {
+                    console.log("🚀 Initializing App (Consolidated)...");
+                    // Use 127.0.0.1 to avoid Windows DNS delay
+                    const res = await fetch('/api/init');
+                    const data = await res.json();
+
+                    // 1. Update Market UI
+                    updateMarketUI(data.market);
+
+                    // 2. Update Models
+                    updateModelsUI(data.models);
+
+                    // 3. Cache Top Picks for initial render
+                    if (data.top_picks) {
+                        APP_STATE.technical.data = data.top_picks;
+                        APP_STATE.technical.status = 'ready';
+                    }
+
+                    // 4. Start polling sync status
+                    pollSyncStatus();
+
+                    // 5. Initial Render
+                    renderTabFromState_or_Fetch();
+
+                    console.log("✅ App Initialized in " + data.perf_ms + "ms (Server)");
+                } catch (e) {
+                    console.error("Init App Error:", e);
+                    // Fallback to sequential if init fails
+                    loadModels();
+                    pollSyncStatus();
+                    loadMarketStatus();
+                }
+            }
+
+            // --- Tabs ---
+            let marketChartInstance = null;
+            async function loadMarketStatus() {
+                try {
+                    const res = await fetch('/api/market_status');
+                    const data = await res.json();
+                    updateMarketUI(data);
+                } catch (e) { console.error("Market Load Error:", e); }
+            }
+
+            function updateMarketUI(data) {
+                if (!data) return;
+                document.getElementById('market-bull-ratio').innerText = (data.bull_ratio || 0) + '%';
+                document.getElementById('market-temp').innerText = data.market_temp || 0;
+                document.getElementById('market-ai-sent').innerText = (data.ai_sentiment || 0) + '%';
+
+                if (data.model_version) {
+                    const el = document.getElementById('model-version-mkt');
+                    if (el) el.innerText = data.model_version;
+                }
+
+                const badge = document.getElementById('market-risk-badge');
+                if (badge) {
+                    badge.innerText = data.risk_level || 'N/A';
+                    badge.className = 'badge';
+
+                    let strategyText = "";
+                    if (data.risk_level && data.risk_level.includes("HIGH")) {
+                        badge.classList.add('badge-score-low');
+                        strategyText = "⚠️ **Defensive Mode**: Market is weak. Reduce position sizes and tighten stops.";
+                    } else if (data.risk_level && data.risk_level.includes("LOW")) {
+                        badge.classList.add('badge-score-high');
+                        strategyText = "🚀 **Aggressive Mode**: Market is bullish. Focus on breakouts and trend following.";
+                    } else {
+                        badge.classList.add('badge-score-mid');
+                        strategyText = "⚖️ **Neutral Mode**: Market is mixed. Be selective and take profits early.";
+                    }
+                    const strategyEl = document.getElementById('market-strategy-text');
+                    if (strategyEl) {
+                        if (typeof marked !== 'undefined') {
+                            strategyEl.innerHTML = marked.parse(strategyText);
+                        } else {
+                            strategyEl.innerText = strategyText;
+                        }
+                    }
+                }
+
+                // --- Render Chart ---
+                renderMarketChart(data.history || []);
+            }
+
+            function renderMarketChart(history) {
+                const ctx = document.getElementById('marketChart').getContext('2d');
+                if (marketChartInstance) marketChartInstance.destroy();
+
+                const labels = history.map(h => h.timestamp.substring(5)); // Show MM-DD
+                const bullData = history.map(h => h.bull_ratio);
+                const aiData = history.map(h => h.ai_sentiment);
+                const tempData = history.map(h => h.market_temp);
+
+                marketChartInstance = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [
+                            {
+                                label: i18n('chart_bull_ratio'),
+                                data: bullData,
+                                borderColor: '#38bdf8',
+                                backgroundColor: 'transparent',
+                                tension: 0.3,
+                                pointRadius: history.length > 1 ? 2 : 5
+                            },
+                            {
+                                label: i18n('chart_ai_sent'),
+                                data: aiData,
+                                borderColor: '#a855f7',
+                                backgroundColor: 'transparent',
+                                tension: 0.3,
+                                pointRadius: history.length > 1 ? 2 : 5
+                            },
+                            {
+                                label: i18n('chart_market_temp'),
+                                data: tempData,
+                                borderColor: '#f43f5e',
+                                backgroundColor: 'transparent',
+                                tension: 0.3,
+                                pointRadius: history.length > 1 ? 2 : 5
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: true, position: 'top', labels: { color: '#94a3b8', boxWidth: 10, font: { size: 10 } } }
+                        },
+                        scales: {
+                            x: { grid: { display: false }, ticks: { color: '#64748b', font: { size: 10 } } },
+                            y: {
+                                min: 0,
+                                max: 100,
+                                grid: { color: 'rgba(255,255,255,0.05)' },
+                                ticks: {
+                                    color: '#64748b',
+                                    font: { size: 10 },
+                                    stepSize: 20
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            function switchTab(tab) {
+                if (CURRENT_TAB === tab) return;
+
+                if (abortController) {
+                    console.log("Cancelling previous request due to tab switch");
+                    abortController.abort();
+                }
+                abortController = new AbortController();
+
+                CURRENT_TAB = tab;
+                document.getElementById('searchInput').value = '';
+                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                document.querySelector(`.tab-btn[data-target="${tab}"]`).classList.add('active');
+
+                // Hide All Areas
+                const marketEl = document.getElementById('market');
+                if (marketEl) marketEl.style.display = 'none';
+
+                const tableEl = document.getElementById('table-container');
+                if (tableEl) tableEl.style.display = 'none';
+
+                updateDefinitionCard();
+
+                if (tab === 'market') {
+                    if (marketEl) marketEl.style.display = 'block';
+                    loadMarketStatus();
+                } else {
+                    if (tableEl) tableEl.style.display = 'block';
+                    renderTabFromState_or_Fetch();
+                }
+            }
+
+            async function renderTabFromState_or_Fetch() {
+                const container = document.getElementById('table-container');
+
+                // 1. Handle Backtest specifically (Custom UI)
+                if (CURRENT_TAB === 'backtest') {
+                    if (APP_STATE.backtest.status === 'done' && APP_STATE.backtest.html) {
+                        container.innerHTML = APP_STATE.backtest.html;
+                    } else if (APP_STATE.backtest.status === 'loading') {
+                        container.innerHTML = `<div class="loading">⏳ Traveling back 30 days... (This may take a moment)</div>`;
+                    } else {
+                        renderDefaultBacktestUI(container);
+                    }
+                    return;
+                }
+
+                // 2. Handle Smart Scan
+                if (CURRENT_TAB === 'smart-scan') {
+                    if (APP_STATE.smartScan.data) {
+                        renderTable(APP_STATE.smartScan.data);
+                    } else {
+                        fetchSmartScan();
+                    }
+                    return;
+                }
+
+                // 3. Handle Standard Tabs (AI, Technical)
+                let stateKey = CURRENT_TAB === 'ai' ? 'ai' : 'technical';
+
+                if (APP_STATE[stateKey].data) {
+                    renderTable(APP_STATE[stateKey].data);
+                } else {
+                    fetchData();
+                }
+            }
+
+            function renderDefaultBacktestUI(container) {
+                container.innerHTML = `
+                <div style="text-align:center; padding:40px;">
+                    <h3 style="color:var(--text-main)">🧪 Time Machine Backtest</h3>
+                    <p style="color:var(--text-muted)">Verify AI performance by simulating a buy 30 days ago.</p>
+                    <button class="btn btn-primary" onclick="runBacktest()" style="padding:15px 30px; font-size:1.2rem; margin-top:20px;">🚀 Start 30-Day Simulation</button>
+                </div>
+             `;
+            }
+
+            function updateDefinitionCard() {
+                const card = document.getElementById('definition-card');
+                if (CURRENT_TAB === 'technical') {
+                    card.style.borderColor = 'rgba(16, 185, 129, 0.2)';
+                    card.style.background = 'rgba(16, 185, 129, 0.05)';
+                    card.innerHTML = `
+                    <div style="display: flex; gap: 20px; align-items: center;">
+                        <div style="flex: 1;">
+                            <strong style="color: var(--success); display: block; margin-bottom: 5px;">${i18n('rise_score_title')}</strong>
+                            ${i18n('rise_score_desc')}
+                        </div>
+                    </div>
+                `;
+                } else if (CURRENT_TAB === 'ai' || CURRENT_TAB === 'smart-scan') {
+                    const isAI = CURRENT_TAB === 'ai';
+                    card.style.borderColor = 'rgba(168, 85, 247, 0.2)';
+                    card.style.background = 'rgba(168, 85, 247, 0.05)';
+
+                    // Removed inline sniperManual
+
+                    card.innerHTML = `
+                   <div style="display: flex; flex-direction: column; gap: 10px;">
+                        <div style="display: flex; gap: 20px; flex-wrap: wrap; align-items: center;">
+                            <div style="flex: 1; min-width: 250px;">
+                                <strong style="color: var(--ai-color); display: block; margin-bottom: 5px;">
+                                    ${isAI ? i18n('manual_title') : i18n('tab_scan')}
+                                </strong>
+                                ${isAI ? i18n('manual_desc') : i18n('searching')}
+                            </div>
+                            ${!isAI ? `
+                            <div style="display: flex; gap: 15px; flex-wrap: wrap; align-items: center;">
+                                <label><input type="checkbox" id="chk-high-ai" checked onchange="fetchSmartScan()"> High AI (>70%)</label>
+                                <label><input type="checkbox" id="chk-vol-surge" onchange="fetchSmartScan()"> Volume Surge (>1.5x)</label>
+                                <label><input type="checkbox" id="chk-kd-gold" onchange="fetchSmartScan()"> KD Golden Cross</label>
+                                <label><input type="checkbox" id="chk-macd-bull" onchange="fetchSmartScan()"> MACD Flip</label>
+                            </div>
+                            ` : `
+                            <div style="flex: 2; display: flex; gap: 15px; font-size: 0.85rem; color: var(--text-muted); align-items: center; justify-content: flex-end;">
+                                <button class="btn" style="font-size:0.8rem; padding:4px 8px; margin-right:auto;" onclick="openManualModal()">📖 ${i18n('btn_manual') || 'Strategy Manual'}</button>
+                                
+                                <div style="display:flex; align-items:center; gap:8px;">
+                                    <label style="font-size:0.8rem; white-space:nowrap">${i18n('model_select_label')}</label>
+                                    <select onchange="changeAIVersion(this.value)" style="background:var(--card-bg); color:white; border:1px solid var(--border); border-radius:4px; padding:2px 6px; font-size:0.8rem;">
+                                        <option value="">Latest</option>
+                                        ${APP_STATE.modelVersions.map(v => `
+                                            <option value="${v.version}" ${APP_STATE.selectedVersion === v.version ? 'selected' : ''}>${v.version}</option>
+                                        `).join('')}
+                                    </select>
+                                </div>
+
+                                <div style="display:flex; flex-direction:column; align-items:flex-end;">
+                                    <div style="font-size:0.75rem;">🕒 Last Sync: <b style="color:var(--text-main)" id="last-sync">--</b></div>
+                                    <div style="font-size:0.75rem;">🏷️ Version: <b style="color:var(--ai-color)" id="model-version">Loading...</b></div>
+                                </div>
+                            </div>
+                            `}
+                        </div>
+                        ${!isAI ? '' : ''} 
+                    </div>
+                `;
+                } else if (CURRENT_TAB === 'market') {
+                    card.style.borderColor = 'rgba(56, 189, 248, 0.2)';
+                    card.style.background = 'rgba(56, 189, 248, 0.05)';
+                    card.innerHTML = `
+                    <div style="display: flex; gap: 20px; align-items: center;">
+                         <strong style="color: var(--accent); font-size: 1.1rem;">${i18n('tab_market')}</strong>
+                         <div>${i18n('tab_market_desc')}</div>
+                         <div style="margin-left:auto; font-size:0.8rem; color:var(--text-muted)">
+                            🏷️ Model: <b style="color:var(--ai-color);" id="model-version-mkt">Consensus</b>
+                         </div>
+                    </div>
+                 `;
+                } else if (CURRENT_TAB === 'backtest') {
+                    card.style.borderColor = 'rgba(34, 197, 94, 0.2)';
+                    card.style.background = 'rgba(34, 197, 94, 0.05)';
+                    card.innerHTML = `
+                    <div style="display: flex; gap: 20px; align-items: center;">
+                         <div style="flex:1">
+                            <strong style="color: var(--success); font-size: 1.1rem; display:block; margin-bottom:4px;">${i18n('backtest_title')}</strong>
+                            <div>${i18n('backtest_desc')}</div>
+                         </div>
+                         <button class="btn btn-primary" onclick="runBacktest()">${i18n('btn_run_sim')}</button>
+                    </div>
+                 `;
+                }
+            }
+
+            function renderSkeleton(container, rowCount = 10) {
+                let html = '<table><thead><tr>';
+                // Dummy headers
+                for (let i = 0; i < 5; i++) html += '<th><div class="skeleton" style="height:12px; width:50px;"></div></th>';
+                html += '</tr></thead><tbody>';
+                for (let i = 0; i < rowCount; i++) {
+                    html += `<tr>${'<td><div class="skeleton" style="height:16px;"></div></td>'.repeat(5)}</tr>`;
+                }
+                html += '</tbody></table>';
+                container.innerHTML = html;
+            }
+
+            // --- Fetch Data ---
+            function changeAIVersion(version) {
+                APP_STATE.selectedVersion = version;
+                APP_STATE.ai.status = 'idle'; // Trigger re-fetch
+                fetchData();
+            }
+
+            async function loadModels() {
+                try {
+                    const res = await fetch('/api/models');
+                    const data = await res.json();
+                    updateModelsUI(data);
+                } catch (e) { console.error("Load Models Error:", e); }
+            }
+
+            function updateModelsUI(data) {
+                APP_STATE.modelVersions = data || [];
+                if (CURRENT_TAB === 'ai') updateDefinitionCard();
+            }
+
+            async function fetchData() {
+                const container = document.getElementById('table-container');
+                renderSkeleton(container);
+
+                try {
+                    let url = '/api/top_picks?sort=score';
+                    let stateKey = 'technical';
+
+                    if (CURRENT_TAB === 'ai') {
+                        url = '/api/top_picks?sort=ai';
+                        if (APP_STATE.selectedVersion) url += `&version=${APP_STATE.selectedVersion}`;
+                        stateKey = 'ai';
+                    }
+
+                    const res = await fetch(url, { signal: abortController?.signal });
+                    // ... rest of fetch logic ...
+
+                    if (!res.ok) {
+                        const text = await res.text();
+                        throw new Error(`Server returned ${res.status}: ${text.substring(0, 100)}...`);
+                    }
+
+                    const data = await res.json();
+
+                    // Cache it
+                    APP_STATE[stateKey].data = data;
+                    APP_STATE[stateKey].status = 'done';
+
+                    // Update Version Info in UI if targeting AI tab
+                    if (data.length > 0 && CURRENT_TAB === 'ai') {
+                        const first = data[0];
+                        const vBadge = document.getElementById('model-version');
+                        const sEl = document.getElementById('last-sync');
+                        if (vBadge) vBadge.innerText = APP_STATE.selectedVersion || first.model_version || 'v4.0';
+                        if (sEl) {
+                            let syncTime = first.last_sync || 'Just now';
+                            if (syncTime.length > 19) syncTime = syncTime.substring(0, 19);
+                            sEl.innerText = syncTime;
+                        }
+                    }
+
+                    renderTable(data);
+                } catch (err) {
+                    if (err.name === 'AbortError') return;
+                    console.error("Fetch error:", err);
+                    container.innerHTML = `<div style="text-align:center; padding:20px; color:var(--error)">Error loading data: ${err.message}</div>`;
+                }
+            }
+
+            async function fetchSmartScan() {
+                const container = document.getElementById('table-container');
+
+                // If we have data and we just switched back, we might want to skip fetch?
+                // But this function is also called on checkbox change.
+                // Let's just always fetch on interaction, but save to state.
+
+                const criteria = [];
+                if (document.getElementById('chk-high-ai')?.checked) criteria.push('high_ai');
+                if (document.getElementById('chk-vol-surge')?.checked) criteria.push('vol_surge');
+                if (document.getElementById('chk-kd-gold')?.checked) criteria.push('kd_gold');
+                if (document.getElementById('chk-macd-bull')?.checked) criteria.push('macd_bull');
+
+
+                container.innerHTML = `<div class="loading">${i18n('searching')}</div>`;
+                renderSkeleton(container);
+
+                try {
+                    const res = await fetch('/api/smart_scan', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(criteria),
+                        signal: abortController?.signal
+                    });
+                    const data = await res.json();
+
+
+                    // Save to State
+                    APP_STATE.smartScan.data = data;
+                    APP_STATE.smartScan.status = 'done';
+
+                    // Double check if we are still on the smart-scan tab
+                    if (CURRENT_TAB === 'smart-scan') {
+                        renderTable(data);
+                    }
+                } catch (err) {
+                    if (err.name === 'AbortError') return;
+                    container.innerHTML = `<div style="text-align:center; padding:20px; color:var(--error)">Scan Error: ${err.message}</div>`;
+                }
+            }
+
+            async function runBacktest() {
+                const container = document.getElementById('table-container');
+
+                // Set State to Loading
+                APP_STATE.backtest.status = 'loading';
+                APP_STATE.backtest.html = null;
+
+                container.innerHTML = `<div class="loading">${i18n('backtest_loading')}</div>`;
+
+                try {
+                    // We do NOT use abortController here if we want it to persist? 
+                    // Actually, if we use the global abortController, switching tabs cancels it.
+                    // To keep it running, we should use a separate controller or none.
+                    // Let's use none for backtest to allow background processing.
+                    const res = await fetch('/api/backtest?days=30');
+                    const data = await res.json();
+
+                    // Render Backtest Result
+                    if (data.error || data.detail) {
+                        const errorMsg = data.error || data.detail;
+                        const errorHtml = `<div style="text-align:center; padding:20px; color:var(--error)">Backtest Error: ${errorMsg}</div>`;
+                        container.innerHTML = errorHtml;
+                        APP_STATE.backtest.status = 'error';
+                        return;
+                    }
+
+                    const summary = data.summary;
+                    const picks = data.top_picks || data.top_10_picks; // Backward compatibility
+
+                    let html = `
+                    <div style="padding:20px; animation: fadeIn 0.5s;">
+                        <h2 style="text-align:center; color:var(--text-main); margin-bottom:5px;">🧪 Simulation Result</h2>
+                        <p style="text-align:center; color:var(--text-muted); margin-bottom:10px;">Entry Date: ${data.simulated_date} (30 Days Ago)</p>
+                        
+                        <div style="text-align:center; margin-bottom:20px;">
+                            <span class="badge" style="background:rgba(255,255,255,0.05); color:var(--text-muted); font-size:0.8rem; padding:5px 12px;">
+                                📊 Candidate Pool: ${data.candidate_pool_size || 'N/A'} stocks scanned
+                                <span style="margin:0 10px;">|</span>
+                                🎯 AI Range: ${(data.ai_prob_min || 0).toFixed(0)}% - ${(data.ai_prob_max || 0).toFixed(0)}%
+                            </span>
+                        </div>
+
+                        <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:15px; margin-bottom:25px;">
+                            <div class="stat-box" style="text-align:center; border: 1px solid ${summary.avg_return > 0 ? 'var(--success)' : 'var(--error)'}">
+                                <div style="color:var(--text-muted)">Avg Return (30d)</div>
+                                <div style="font-size:1.8rem; font-weight:bold; color: ${summary.avg_return > 0 ? 'var(--success)' : 'var(--error)'}">
+                                    ${(summary.avg_return * 100).toFixed(1)}%
+                                </div>
+                            </div>
+                            <div class="stat-box" style="text-align:center;">
+                                <div style="color:var(--text-muted)">Win Rate</div>
+                                <div style="font-size:1.8rem; font-weight:bold; color:var(--accent)">
+                                    ${(summary.win_rate * 100).toFixed(0)}%
+                                </div>
+                            </div>
+                             <div class="stat-box" style="text-align:center;">
+                                <div style="color:var(--text-muted)">Best Pick</div>
+                                <div style="font-size:1.2rem; font-weight:bold; color:var(--text-main)">
+                                    ${summary.best_stock}
+                                </div>
+                                <div style="color:${summary.best_return > 0 ? 'var(--success)' : 'var(--error)'}">
+                                    ${(summary.best_return * 100).toFixed(1)}%
+                                </div>
+                            </div>
+                            
+                            <!-- Strategy Recommendation Card -->
+                            <div class="stat-box" style="grid-column: span 3; background: rgba(var(--accent-rgb), 0.1); border: 1px dashed var(--accent); padding:15px; text-align:left;">
+                                <div style="font-weight:bold; margin-bottom:8px; display:flex; align-items:center;">
+                                    <span style="font-size:1.4rem; margin-right:10px;">🛡️</span> 策略建議：集中攻略 (Concentrated Strategy)
+                                </div>
+                                <div style="font-size:0.85rem; color:var(--text-muted); line-height:1.5;">
+                                    <b>執行條件：</b>掃描候選池 500 檔 → 排除低價股 (<$15) → 鎖定 AI 機率 > 40% → 挑選最強 10 名。<br>
+                                    <b>實戰指南：</b>回測顯示當前模型在「分散投資前10名」時具備極高韌性。建議等權重分配資金於前 10 檔，持有期間約 20-30 天，可捕捉大贏家同時規避單一標的回檔風險。
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <h3 style="margin-bottom:15px;">📜 Top 10 High Confidence Picks</h3>
+                        <div class="table-wrapper">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Ticker</th>
+                                        <th>Entry Price</th>
+                                        <th>Current Price</th>
+                                        <th>AI Prob (Then)</th>
+                                        <th style="text-align:right">Return</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                `;
+
+                    // Add rows
+                    picks.forEach(p => {
+                        const retColor = p.actual_return > 0 ? 'var(--success)' : 'var(--error)';
+                        const prob = (p.ai_prob_at_entry * 100).toFixed(0);
+
+                        // Confidence Coloring
+                        let probStyle = 'background:rgba(255,255,255,0.05); color:var(--accent)';
+                        if (prob >= 60) {
+                            probStyle = 'background:rgba(46, 204, 113, 0.2); color:var(--success)';
+                        } else if (prob >= 40) {
+                            probStyle = 'background:rgba(241, 196, 15, 0.2); color:#f1c40f';
+                        }
+
+                        html += `
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); cursor:pointer" onclick="openDetail('${p.ticker}')">
+                            <td>
+                                <span style="font-weight:bold; color:var(--accent)">${p.ticker}</span> 
+                                ${p.name && p.name !== p.ticker ? `<span style="color:var(--text-muted); font-size:0.9em">${p.name}</span>` : ''}
+                            </td>
+                            <td>$${p.entry_price.toFixed(1)}</td>
+                            <td>$${p.current_price.toFixed(1)}</td>
+                            <td><span class="badge" style="${probStyle}; min-width:40px;">${prob}%</span></td>
+                            <td style="text-align:right; color:${retColor}; font-weight:bold;">
+                                ${(p.actual_return * 100).toFixed(1)}%
+                            </td>
+                        </tr>
+                    `;
+                    });
+
+                    html += `</tbody></table></div></div>
+                    <div style="text-align:center; margin-top:30px;">
+                        <button class="btn" onclick="APP_STATE.backtest.status='idle'; renderDefaultBacktestUI(document.getElementById('table-container'))">🔄 Run Another Simulation</button>
+                    </div>
+                `;
+
+                    // Save Result to State
+                    APP_STATE.backtest.status = 'done';
+                    APP_STATE.backtest.html = html;
+
+                    // Only render if we are still on the backtest tab
+                    if (CURRENT_TAB === 'backtest') {
+                        container.innerHTML = html;
+                    }
+
+                } catch (err) {
+                    // If we didn't use abortController, this is a real network error
+                    if (CURRENT_TAB === 'backtest') {
+                        container.innerHTML = `<div style="text-align:center; padding:20px; color:var(--error)">Backtest Error: ${err.message}</div>`;
+                    }
+                    APP_STATE.backtest.status = 'error';
+                }
+            }
+
+            function handleSort(col) {
+                if (APP_STATE.sortCol === col) {
+                    APP_STATE.sortDir = APP_STATE.sortDir === 'asc' ? 'desc' : 'asc';
+                } else {
+                    APP_STATE.sortCol = col;
+                    APP_STATE.sortDir = 'desc';
+                }
+
+                const table = document.querySelector('table');
+                if (!table) return;
+                const tbody = table.querySelector('tbody');
+                const rows = Array.from(tbody.querySelectorAll('tr'));
+
+                // Sort DOM rows directly
+                rows.sort((a, b) => {
+                    let valA, valB;
+
+                    // Helper to get value from data attributes or text
+                    const getCellValue = (row, field) => {
+                        const cell = row.querySelector(`[data-field="${field}"]`);
+                        return cell ? cell.getAttribute('data-value') : '';
+                    };
+
+                    valA = getCellValue(a, col);
+                    valB = getCellValue(b, col);
+
+                    // Numeric comparison if both are numbers
+                    if (!isNaN(valA) && !isNaN(valB) && valA !== '' && valB !== '') {
+                        return (parseFloat(valA) - parseFloat(valB)) * (APP_STATE.sortDir === 'asc' ? 1 : -1);
+                    }
+
+                    // String comparison
+                    return valA.localeCompare(valB) * (APP_STATE.sortDir === 'asc' ? 1 : -1);
+                });
+
+                // Re-append in new order (appendChild moves existing nodes)
+                rows.forEach(row => tbody.appendChild(row));
+
+                // Update header icons (simple way: render headers again or just update icons)
+                renderTableHeaders();
+            }
+
+            function renderTableHeaders() {
+                const table = document.querySelector('table');
+                if (!table) return;
+                const thead = table.querySelector('thead');
+
+                const sortIcon = (col) => {
+                    if (APP_STATE.sortCol !== col) return '↕️';
+                    return APP_STATE.sortDir === 'asc' ? '🔼' : '🔽';
+                };
+
+                const isAIBased = (CURRENT_TAB === 'ai' || CURRENT_TAB === 'smart-scan');
+                let headers = `
+                    <th onclick="handleSort('ticker')" style="cursor:pointer" title="Stock Ticker Symbol">${i18n('col_ticker')} ${sortIcon('ticker')}</th>
+                    <th style="min-width: 100px;">${i18n('col_name')}</th>
+                    <th onclick="handleSort('price')" style="cursor:pointer; text-align:right" title="Last Close Price (20min delay)">${i18n('col_price')} ${sortIcon('price')}</th>
+                    <th onclick="handleSort('change')" style="cursor:pointer; text-align:right" title="Daily Change %">${i18n('col_change')} ${sortIcon('change')}</th>
+                `;
+
+                if (isAIBased) {
+                    headers += `
+                        <th onclick="handleSort('target')" style="cursor:pointer; text-align:right" title="AI Expected Target (+15%)">${i18n('col_target')} ${sortIcon('target')}</th>
+                        <th style="text-align:right" title="AI Exit Point (-5%)">${i18n('col_stop')}</th>
+                        <th onclick="handleSort('rise')" style="cursor:pointer; text-align:right" title="Technical Score (0-100)">${i18n('col_rise')} ${sortIcon('rise')}</th>
+                        <th style="text-align:center" title="Technical Confirmation Signal">${i18n('col_signal')}</th>
+                        <th onclick="handleSort('ai')" style="cursor:pointer; text-align:right" title="AI Sniper Model Win Prob. (60%+ Recommended)">${i18n('col_ai')} ${sortIcon('ai')}</th>
+                    `;
+                } else {
+                    headers += `
+                        <th onclick="handleSort('trend')" style="cursor:pointer; text-align:right" title="Trend Score (EMA 20/60 Cross)">${i18n('col_trend')} ${sortIcon('trend')}</th>
+                        <th onclick="handleSort('momt')" style="cursor:pointer; text-align:right" title="Momentum Score (RSI/MACD/KD)">${i18n('col_momt')} ${sortIcon('momt')}</th>
+                        <th onclick="handleSort('rise')" style="cursor:pointer; text-align:right" title="Total Technical Score (Weighted)">${i18n('col_rise')} ${sortIcon('rise')}</th>
+                    `;
+                }
+                thead.innerHTML = `<tr>${headers}</tr>`;
+            }
+
+            function renderTable(data) {
+                const container = document.getElementById('table-container');
+                if (data.length === 0) {
+                    container.innerHTML = `<div class="loading">${i18n('no_results')}</div>`;
+                    return;
+                }
+
+                const isAIBased = (CURRENT_TAB === 'ai' || CURRENT_TAB === 'smart-scan');
+
+                let rows = data.map(item => {
+                    const score = item.score || {};
+                    let ai = item.ai_probability || 0;
+
+                    // If a specific version is selected, we already have that data from API
+                    // No need to override ai probability from ai_details here anymore
+                    // since the backend returns version-specific ai_probability
+
+                    const lastPrice = score.last_price || item.price || 0;
+                    const isSelected = item.ticker === SELECTED_TICKER ? 'selected-row' : '';
+
+                    // Standardized color logic
+                    let scoreClass = 'badge-score-low'; // < 60 Red
+                    const totalScore = score.total_score || 0;
+                    if (totalScore >= 80) scoreClass = 'badge-score-high'; // Green
+                    else if (totalScore >= 60) scoreClass = 'badge-score-mid'; // Yellow
+
+                    const changePercent = score.change_percent || 0;
+                    const changeColor = changePercent >= 0 ? 'var(--success)' : 'var(--danger)';
+                    const changeSign = changePercent >= 0 ? '+' : '';
+
+                    let extraCols = '';
+                    if (!isAIBased) {
+                        extraCols = `
+                            <td style="text-align:right" data-field="trend" data-value="${score.trend_score || 0}">${(score.trend_score || 0).toFixed(0)}</td>
+                            <td style="text-align:right" data-field="momt" data-value="${score.momentum_score || 0}">${(score.momentum_score || 0).toFixed(0)}</td>
+                            <td style="text-align:right" data-field="rise" data-value="${totalScore}"><span class="badge ${scoreClass}">${totalScore.toFixed(0)}</span></td>
+                        `;
+                    } else {
+                        // Standardized AI Prob colors
+                        let aiClass = 'var(--text-muted)'; // Default gray
+                        let aiBadgeStyle = 'rgba(255,255,255,0.05)';
+                        if (ai >= 0.6) { // High Green
+                            aiClass = 'var(--success)';
+                            aiBadgeStyle = 'rgba(16, 185, 129, 0.2)';
+                        } else if (ai >= 0.3) { // Mid Yellow
+                            aiClass = 'var(--warning)';
+                            aiBadgeStyle = 'rgba(245, 158, 11, 0.2)';
+                        }
+
+                        const pct = (ai * 100).toFixed(1) + '%';
+                        const targetP = item.ai_target_price || (lastPrice * 1.15);
+                        const stopP = item.ai_stop_price || (lastPrice * 0.95);
+
+                        let riseColor = 'var(--text-muted)';
+                        if (totalScore >= 80) riseColor = 'var(--success)';
+                        else if (totalScore >= 60) riseColor = 'var(--warning)';
+
+                        extraCols = `
+                            <td style="text-align:right; color:var(--success)" data-field="target" data-value="${targetP}">$${parseFloat(targetP).toFixed(1)}</td>
+                            <td style="text-align:right; color:var(--danger)">$${parseFloat(stopP).toFixed(1)}</td>
+                            <td style="text-align:right; color:${riseColor}; font-weight:bold;" data-field="rise" data-value="${totalScore}">${totalScore.toFixed(0)}</td>
+                            <td style="text-align:center; color:${aiClass}">${ai >= 0.6 ? '🔥' : (ai >= 0.3 ? '⚡' : '💤')}</td>
+                            <td style="text-align:right" data-field="ai" data-value="${ai}"><span class="badge badge-ai" style="background:${aiBadgeStyle}; border: 1px solid ${aiClass}">${pct}</span></td>
+                        `;
+                    }
+
+                    return `
+                        <tr class="${isSelected}" onclick="openDetail('${item.ticker}')">
+                            <td style="font-weight:bold; color:var(--accent)" data-field="ticker" data-value="${item.ticker}">${item.ticker}</td>
+                            <td style="color:white; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px;">${item.name || item.ticker}</td>
+                            <td style="text-align:right" data-field="price" data-value="${lastPrice}">${lastPrice.toFixed(2)}</td>
+                            <td style="text-align:right; color:${changeColor}" data-field="change" data-value="${changePercent}">${changeSign}${changePercent.toFixed(2)}%</td>
+                            ${extraCols}
+                        </tr>
+                    `;
+                }).join('');
+
+                container.innerHTML = `
+                    <table>
+                        <thead></thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                `;
+                renderTableHeaders();
+            }
+
+            // --- Modal ---
+            async function openDetail(ticker) {
+                SELECTED_TICKER = ticker; // Set selected
+                // Re-render table to update selection highlight (optional: strictly usually better to just update class, but re-render is cheap here)
+                // Actually, let's just update the class for performance and smoothness
+                document.querySelectorAll('tr').forEach(tr => tr.classList.remove('selected-row'));
+                // Find row and add class? Hard without ID. Re-render is safer for state consistency if data hasn't changed.
+                // Ideally we just update the specific row style, but for now let's rely on the variable.
+                // To see the highlight immediately without reload:
+                // We can't easily find the row without an ID.
+                // Let's just persist it for next render.
+
+                const modal = document.getElementById('detailsModal');
+                document.getElementById('searchResults').style.display = 'none';
+                document.getElementById('searchInput').value = '';
+
+                modal.classList.add('active');
+
+                // Set Loading
+                document.getElementById('modalTicker').innerText = ticker;
+                document.getElementById('modalPrice').innerText = 'Loading...';
+                document.getElementById('modalAI').innerText = '...';
+                document.getElementById('modalChart').innerHTML = '';
+                document.getElementById('modalStats').innerHTML = '';
+                document.getElementById('modal-analysis').innerText = 'Generating report...';
+                document.getElementById('modal-ai-breakdown').innerHTML = '';
+
+                try {
+                    const res = await fetch(`/api/stock/${ticker}`);
+                    const data = await res.json();
+
+                    const score = data.score;
+                    const ai = data.ai_probability || 0;
+                    const analysis = score.analysis || { trend: 'N/A', momentum: 'N/A', setup: 'N/A' };
+
+                    // Header
+                    document.getElementById('modalTicker').innerText = `${data.ticker} ${score.name || ''}`; // Name might be missing in detail API
+                    document.getElementById('modalPrice').innerText = `$${score.last_price.toFixed(2)}`;
+                    document.getElementById('modalScoreBadge').innerText = score.total_score.toFixed(0);
+
+                    // Color Badge
+                    const b = document.getElementById('modalScoreBadge');
+                    b.className = 'badge';
+                    if (score.total_score >= 80) b.classList.add('badge-score-high');
+                    else if (score.total_score >= 60) b.classList.add('badge-score-mid');
+                    else b.classList.add('badge-score-low');
+
+                    // AI
+                    const aiEl = document.getElementById('modalAI');
+                    const aiConf = document.getElementById('modalAIConf');
+                    aiEl.innerText = (ai * 100).toFixed(1) + '%';
+
+                    // Target / Stop prices
+                    const targetP = data.ai_target_price || (score.last_price * 1.15);
+                    const stopP = data.ai_stop_price || (score.last_price * 0.95);
+                    document.getElementById('modalTarget').innerText = `$${parseFloat(targetP).toFixed(1)}`;
+                    document.getElementById('modalStop').innerText = `$${parseFloat(stopP).toFixed(1)}`;
+
+                    if (ai >= 0.3) {
+                        aiEl.style.color = 'var(--success)';
+                        aiConf.innerText = "🔥 Strong Signal - Sniper Setup!";
+                        aiConf.className = 'ai-confidence-high';
+                    } else if (ai >= 0.15) {
+                        aiEl.style.color = 'var(--warning)';
+                        aiConf.innerText = "⚡ Medium Signal";
+                        aiConf.className = 'ai-confidence-med';
+                    } else {
+                        aiEl.style.color = 'var(--text-muted)';
+                        aiConf.innerText = "💤 Weak Signal";
+                        aiConf.className = 'ai-confidence-low';
+                    }
+
+                    // AI Breakdown (NEW)
+                    const breakdownContainer = document.getElementById('modal-ai-breakdown');
+                    breakdownContainer.innerHTML = '';
+                    const details = data.score.ai_details || {};
+
+                    if (Object.keys(details).length > 0) {
+                        const weightInfo = document.createElement('div');
+                        weightInfo.style.fontSize = '0.7rem';
+                        weightInfo.style.color = 'var(--text-muted)';
+                        weightInfo.style.marginBottom = '5px';
+                        weightInfo.innerHTML = '⚖️ Voting Consensus (Equal Weight 1/3 each)';
+                        breakdownContainer.appendChild(weightInfo);
+
+                        const itemsContainer = document.createElement('div');
+                        itemsContainer.style.display = 'flex';
+                        itemsContainer.style.gap = '10px';
+                        itemsContainer.style.justifyContent = 'center';
+                        itemsContainer.style.width = '100%';
+
+                        for (const [model, prob] of Object.entries(details)) {
+                            if (model === 'legacy') continue;
+                            const p = (prob * 100).toFixed(0);
+                            const barColor = prob > 0.6 ? 'var(--success)' : (prob > 0.5 ? 'var(--accent)' : 'var(--text-muted)');
+
+                            const item = document.createElement('div');
+                            item.style.padding = '4px 10px';
+                            item.style.background = 'rgba(255,255,255,0.05)';
+                            item.style.borderRadius = '6px';
+                            item.style.border = '1px solid var(--border)';
+                            item.style.textAlign = 'center';
+                            item.style.minWidth = '70px';
+                            item.innerHTML = `
+                            <div style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase;">${model}</div>
+                            <div style="font-size: 1rem; font-weight: bold; color: ${barColor};">${p}%</div>
+                        `;
+                            itemsContainer.appendChild(item);
+                        }
+                        breakdownContainer.appendChild(itemsContainer);
+                    }
+
+                    // AI Analyst Report (Consolidated)
+                    document.getElementById('modal-analysis').innerHTML = `
+                    <p style="margin:5px 0"><strong style="color:var(--accent)">Trend:</strong> ${analysis.trend}</p>
+                    <p style="margin:5px 0"><strong style="color:var(--accent)">Momentum:</strong> ${analysis.momentum}</p>
+                    <p style="margin:5px 0"><strong style="color:var(--accent)">Setup:</strong> ${analysis.setup}</p>
+                `;
+
+                    // Stats Grid
+                    document.getElementById('modalStats').innerHTML = `
+                    <div class="stat-box" title="Based on Price vs SMA 20/60 (Max: 40)">
+                        <div class="stat-value">${score.trend_score.toFixed(0)}<span style="font-size:0.7rem; color:var(--text-muted)">/40</span></div>
+                        <div class="stat-label">Trend Score</div>
+                    </div>
+                    <div class="stat-box" title="Based on RSI Wilder & KD Golden Cross (Max: 30)">
+                        <div class="stat-value">${score.momentum_score.toFixed(0)}<span style="font-size:0.7rem; color:var(--text-muted)">/30</span></div>
+                        <div class="stat-label">Momentum</div>
+                    </div>
+                    <div class="stat-box" title="Based on BB Squeeze & Volume Breakthrough (Max: 30)">
+                        <div class="stat-value">${score.volatility_score.toFixed(0)}<span style="font-size:0.7rem; color:var(--text-muted)">/30</span></div>
+                        <div class="stat-label">Volatility</div>
+                    </div>
+                `;
+
+                    // Chart
+                    const history = data.history;
+                    if (history && history.length > 0) {
+                        const prices = history.map(h => h.close);
+                        const minP = Math.min(...prices);
+                        const maxP = Math.max(...prices);
+                        const range = maxP - minP || 1;
+
+                        const bars = history.map(h => {
+                            const hPct = ((h.close - minP) / range) * 80 + 10;
+                            return `<div class="chart-bar" style="height:${hPct}%" data-tooltip="${h.date}: ${h.close}"></div>`;
+                        }).join('');
+                        document.getElementById('modalChart').innerHTML = bars;
+                    }
+
+                } catch (e) {
+                    console.error(e);
+                }
+            }
+
+            function closeModal() {
+                document.getElementById('detailsModal').classList.remove('active');
+            }
+
+            function openManualModal() {
+                // Populate text
+                document.getElementById('manual-desc-modal').innerText = i18n('manual_desc');
+                document.getElementById('tip-1-title-modal').innerText = i18n('tip_1_title');
+                document.getElementById('tip-1-desc-modal').innerText = i18n('tip_1_desc');
+                document.getElementById('tip-2-title-modal').innerText = i18n('tip_2_title');
+                document.getElementById('tip-2-desc-modal').innerText = i18n('tip_2_desc');
+                document.getElementById('tip-3-title-modal').innerText = i18n('tip_3_title');
+                document.getElementById('tip-3-desc-modal').innerText = i18n('tip_3_desc');
+
+                document.getElementById('manualModal').classList.add('active');
+            }
+
+            function closeManualModal() {
+                document.getElementById('manualModal').classList.remove('active');
+            }
+
+            // --- Search ---
+            function handleSearch(q) {
+                console.log("Search Query:", q);
+                const query = q.toLowerCase();
+
+                // Debounce logic
+                if (searchTimeout) clearTimeout(searchTimeout);
+
+                searchTimeout = setTimeout(() => {
+                    if (query.length === 0) {
+                        renderTabFromState_or_Fetch();
+                        return;
+                    }
+
+                    let data = [];
+                    if (CURRENT_TAB === 'smart-scan') data = APP_STATE.smartScan.data;
+                    else if (CURRENT_TAB === 'ai') data = APP_STATE.ai.data;
+                    else data = APP_STATE.technical.data;
+
+                    if (!data) return;
+
+                    const filtered = data.filter(item =>
+                        item.ticker.toLowerCase().includes(query) ||
+                        (item.name || '').toLowerCase().includes(query)
+                    );
+
+                    if (filtered.length === 0) {
+                        const container = document.getElementById('table-container');
+                        container.innerHTML = `
+                <div style="padding:40px; text-align:center;">
+                    <div style="color:var(--text-muted); margin-bottom:15px;">${i18n('no_local_results')}</div>
+                    <button class="btn btn-primary" onclick="searchGlobal('${query}')">${i18n('search_db')}</button>
+                </div>
+            `;
+                        return;
+                    }
+
+                    renderTable(filtered);
+                }, 300);
+            }
+
+            async function searchGlobal(q) {
+                const container = document.getElementById('table-container');
+                container.innerHTML = `<div class="loading">${i18n('searching')}</div>`;
+                try {
+                    const res = await fetch(`/api/search?q=${q}`);
+                    const results = await res.json();
+                    if (results.length === 0) {
+                        container.innerHTML = `<div style="padding:40px; text-align:center; color:var(--text-muted)">${i18n('no_results')}</div>`;
+                        return;
+                    }
+                    renderTable(results);
+                } catch (e) {
+                    console.error("Search Global Error:", e);
+                    container.innerHTML = `<div style="padding:40px; text-align:center; color:var(--error)">Search Error: ${e.message}</div>`;
+                }
+            }
+
+            // --- Sync ---
+            async function triggerSync() {
+                const label = i18n('sync');
+                if (!confirm(`${label}? (~10 mins)`)) return;
+
+                try {
+                    await fetch('/api/sync', { method: 'POST' });
+                    showToast(i18n('syncing'), 'accent');
+                    pollSyncStatus();
+                } catch (e) {
+                    showToast("Sync Start Failed", 'error');
+                }
+            }
+
+            let syncStartTime = null;
+            async function pollSyncStatus() {
+                const bar = document.getElementById('progressBar');
+                const fill = document.getElementById('progressFill');
+                const txt = document.getElementById('syncStatus');
+                const syncBarParent = document.getElementById('progressBar'); // The parent container for the progress bar
+                const syncBar = document.getElementById('progressFill'); // The actual fill element
+                const syncLabel = document.getElementById('syncStatus'); // The text label
+
+                const timer = setInterval(async () => {
+                    const res = await fetch('/api/sync/status');
+                    const data = await res.json(); // Renamed 's' to 'data' for consistency with the provided snippet
+
+                    if (data.is_syncing) {
+                        if (!syncStartTime) syncStartTime = Date.now();
+                        syncBarParent.style.display = 'block';
+                        const percent = (data.current / data.total) * 100;
+                        syncBar.style.width = percent + '%';
+
+                        // Calculate ETA
+                        let etaStr = "";
+                        const elapsed = (Date.now() - syncStartTime) / 1000;
+                        if (data.current > 5 && elapsed > 5) {
+                            const speed = data.current / elapsed;
+                            const remainingStocks = data.total - data.current;
+                            const etaSeconds = Math.round(remainingStocks / speed);
+                            if (etaSeconds > 60) {
+                                etaStr = ` | ETA: ${Math.floor(etaSeconds / 60)}m ${etaSeconds % 60}s`;
+                            } else {
+                                etaStr = ` | ETA: ${etaSeconds}s`;
+                            }
+                        }
+
+                        let statusText = `Syncing... ${data.current} / ${data.total}${etaStr}`;
+                        if (data.current_ticker) {
+                            statusText += ` <span style="color:var(--accent); font-size:0.8rem; margin-left:10px;">[ ${data.current_ticker} ]</span>`;
+                        }
+                        syncLabel.innerHTML = statusText;
+                    } else {
+                        syncStartTime = null;
+                        syncLabel.innerText = "";
+                    }
+
+                    if (!data.is_syncing && data.current > 0 && data.current >= data.total) { // Simple done check
+                        clearInterval(timer);
+                        txt.innerText = i18n('sync_done');
+                        showToast(i18n('sync_done'), 'success');
+                        setTimeout(() => { bar.style.display = 'none'; txt.innerText = ''; fetchData(); }, 2000);
+                    }
+                }, 2000);
+            }
+        </script>
+</body>
+
+</html>

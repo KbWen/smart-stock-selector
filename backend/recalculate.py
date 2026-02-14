@@ -38,25 +38,37 @@ def recalculate_all():
     updated = 0
     errors = 0
     
+    from core.rise_score_v2 import calculate_rise_score_v2
+    from core.indicators_v2 import compute_v4_indicators
+    
+    current_model_version = get_model_version()
+    is_v4 = current_model_version.startswith("v4")
+
     for ticker in tickers:
         try:
             df = load_from_db(ticker)
             if df.empty or len(df) < 60:
                 continue
             
-            # Compute ALL indicators
-            df = compute_all_indicators(df)
-            
-            # 1. Rise Score (Rule-Based)
-            score = calculate_rise_score(df)
+            if is_v4:
+                # V4.1 Pipeline (Enhanced Sniper)
+                df = compute_v4_indicators(df)
+                score = calculate_rise_score_v2(df)
+            else:
+                # V1 Legacy Pipeline
+                df = compute_all_indicators(df)
+                score = calculate_rise_score(df)
             
             # --- Text Analysis ---
+            # Analysis report might need update for V2, but keeping common for now
             prev_row = df.iloc[-2] if len(df) > 1 else df.iloc[-1]
             analysis_report = generate_analysis_report(
                 df.iloc[-1], prev_row, 
-                score['trend_score'], score['momentum_score'], score['volatility_score']
+                score.get('trend_score_v2', score.get('trend_score', 0)),
+                score.get('momentum_score_v2', score.get('momentum_score', 0)),
+                score.get('volatility_score_v2', score.get('volatility_score', 0))
             )
-            score['analysis'] = analysis_report # Embed report in score dict
+            score['analysis'] = analysis_report
             
             # 2. AI Probability (ML)
             ai_result = predict_prob(df)
@@ -67,8 +79,6 @@ def recalculate_all():
             else:
                 ai_prob = ai_result
             
-            # Save all stocks that have any signal
-            current_model_version = get_model_version()
             save_score_to_db(ticker, score, ai_prob, model_version=current_model_version)
             updated += 1
                 
