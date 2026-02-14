@@ -15,6 +15,15 @@ def get_db_connection():
     conn.row_factory = sqlite3.Row # Return dict-like rows
     return conn
 
+def standardize_ticker(ticker: str) -> str:
+    """Standardizes Taiwan stock tickers to numeric codes (e.g., 2454.TW -> 2454)."""
+    if not ticker: return ticker
+    # Strip common Taiwan suffixes
+    for suffix in ['.TW', '.TWO']:
+        if ticker.upper().endswith(suffix):
+            return ticker[:-len(suffix)]
+    return ticker
+
 def init_db():
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -188,7 +197,7 @@ def get_all_tw_stocks():
 def get_stock_name_from_db(ticker: str) -> str:
     """Returns the name of a stock given its ticker."""
     # First try twstock dictionary (fastest)
-    code_only = ticker.split('.')[0]
+    code_only = standardize_ticker(ticker)
     if code_only in twstock.codes:
         return twstock.codes[code_only].name
     return None
@@ -204,8 +213,9 @@ def save_to_db(ticker, df):
              
         # Records
         records = df[['date', 'open', 'high', 'low', 'close', 'volume']].to_dict('records')
-        # Add ticker to each record
-        for r in records: r['ticker'] = ticker
+        # Add standardized ticker to each record
+        std_ticker = standardize_ticker(ticker)
+        for r in records: r['ticker'] = std_ticker
             
         cursor = conn.cursor()
         cursor.executemany('''
@@ -219,6 +229,7 @@ def save_to_db(ticker, df):
         conn.close()
 
 def load_from_db(ticker: str, days: int = 365) -> pd.DataFrame:
+    ticker = standardize_ticker(ticker)
     conn = get_db_connection()
     
     # Optimization: Filter by date to avoid loading full history
@@ -278,6 +289,7 @@ def fetch_stock_data(ticker: str, days: int = 365, force_download: bool = False)
     return pd.DataFrame()
 
 def save_score_to_db(ticker, score_data, ai_prob=None, model_version=None):
+    ticker = standardize_ticker(ticker)
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute('''
