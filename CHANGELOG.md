@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v4.2.0] - 2026-02-14 "The Stability & Automation Update"
+
+### Added
+
+* **CI Integration**: Added GitHub Actions workflow for automated `pytest`.
+* **Centralized Logging**: New `core/logger.py` with rotation and alert triggers.
+* **Modular AI Core**: Refactored `core/ai.py` into a package (`common.py`, `trainer.py`, `predictor.py`).
+
+### Fixed
+
+* **Logging Consistency**: Unified logging across all core and backend modules.
+
 ## [v4.1.0] - 2026-02-14 "The Sniper Optimizer"
 
 ### Added

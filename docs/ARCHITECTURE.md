@@ -1,4 +1,4 @@
-# System Architecture - Sniper V4.1
+# System Architecture - Sniper V4.2
 
 ## Overview
 
@@ -13,8 +13,9 @@ graph TD
     
     subgraph "Backend Core (Python)"
         API --> Engine[Factor Engine (core/analysis.py)]
-        API --> AI[AI Engine (core/ai.py)]
+        API --> AI[AI Engine (core/ai/)]
         API --> DB[(SQLite DB)]
+        API --> Log[Logger (core/logger.py)]
         
         Engine --> DB
         AI --> DB
@@ -45,7 +46,8 @@ graph TD
 * **Key Files**:
   * `data.py`: Data fetching (yfinance/twstock) and database I/O.
   * `analysis.py`: Technical analysis (SMA, RSI, MACD, Bollinger Bands) and Rise Score logic.
-  * `ai.py`: Feature engineering, model training (Ensemble), and prediction.
+  * `ai/`: Feature engineering, model training, and prediction package.
+  * `logger.py`: Centralized logging with file rotation and alert triggers.
   * `indicators_v2.py`: The V4.1 optimized indicator library.
   * `rise_score_v2.py`: The V4.1 scoring rules engine.
 
@@ -77,5 +79,6 @@ graph TD
 ## Design Patterns
 
 * **Repository Pattern**: `core/data.py` abstracts all DB interactions.
-* **Strategy Pattern**: `core/ai.py` supports multiple model versions and legacy/ensemble switching.
-* **Lazy Loading**: The frontend initializes non-critical data (like market charts) asynchronously to speed up First Contentful Paint (FCP).
+* **Strategy Pattern**: `core/ai/` supports multiple model versions and legacy/ensemble switching.
+* **Observer Pattern**: `core/logger.py` uses custom handlers to "observe" high-level errors and trigger alerts.
+* **Lazy Loading**: The frontend initializes non-critical data asynchronously.

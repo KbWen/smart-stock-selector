@@ -43,6 +43,8 @@ Stores the latest calculated technical indicators to speed up scanning.
 | `rsi` | REAL | Relative Strength Index (14) |
 | `macd` | REAL | MACD Line (12, 26) |
 | `macd_signal` | REAL | MACD Signal Line (9) |
+| `ema_20` | REAL | 20-day Exponential Moving Average |
+| `ema_50` | REAL | 50-day Exponential Moving Average |
 | `sma_20` | REAL | 20-day Simple Moving Average |
 | `sma_60` | REAL | 60-day Simple Moving Average |
 | `k_val` | REAL | Stochastic K (9, 3) |

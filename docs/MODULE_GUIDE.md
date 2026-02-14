@@ -25,12 +25,20 @@ This document provides a detailed breakdown of the key Python modules in the sys
 
 * `compute_v4_indicators(df)`: High-performance calculation of Trend, Momentum, and Volatility factors.
 
-### `core/ai.py`
+### `core/ai/` (Package)
 
-**Purpose**: The AI brain.
+**Purpose**: The AI brain, modularized for specialized training and prediction.
 
-* `train_model(tickers)`: Trains the Ensemble V4 model.
-* `predict_prob(df, version)`: Returns the $P_{win}$ probability for a given stock DataFrame. Supports model versioning.
+* `core/ai/common.py`: Universal features and threshold constants.
+* `core/ai/trainer.py`: Model training logic (GB + RF + MLP Ensemble).
+* `core/ai/predictor.py`: Probabilistic inference with model version caching.
+
+### `core/logger.py`
+
+**Purpose**: Centralized observability.
+
+* `setup_logger(name)`: Configures rotating file logs (10MB) and console output.
+* `AlertHandler`: Triggers `send_alert()` notifications on `ERROR` or `CRITICAL` events.
 
 ## Backend Modules (`backend/`)
 

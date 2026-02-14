@@ -53,4 +53,7 @@ For tests involving the database, use a temporary SQLite file or an in-memory da
 
 ## Continuous Integration (CI)
 
-(Future) We plan to set up GitHub Actions to run `pytest` on every Push and Pull Request.
+ We use **GitHub Actions** to automate testing. The [Pytest CI](.github/workflows/pytest.yml) workflow triggers on every Push and Pull Request to the `master` branch.
+
+* **Status**: Active.
+* **Command**: `python -m pytest tests/`

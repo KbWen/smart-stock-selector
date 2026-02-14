@@ -83,6 +83,7 @@ def init_db():
             k_val REAL,
             d_val REAL,
             atr REAL,
+            bb_width REAL,
             model_version TEXT,
             updated_at TIMESTAMP
         )
@@ -105,6 +106,12 @@ def init_db():
     except sqlite3.OperationalError:
         print("Migrating DB: Adding model_version to stock_indicators...")
         cursor.execute("ALTER TABLE stock_indicators ADD COLUMN model_version TEXT")
+
+    try:
+        cursor.execute("SELECT bb_width FROM stock_indicators LIMIT 1")
+    except sqlite3.OperationalError:
+        print("Migrating DB: Adding bb_width to stock_indicators...")
+        cursor.execute("ALTER TABLE stock_indicators ADD COLUMN bb_width REAL")
         
     conn.commit()
     conn.close()
@@ -118,8 +125,8 @@ def save_indicators_to_db(ticker, df, **kwargs):
     try:
         cursor.execute('''
             INSERT OR REPLACE INTO stock_indicators (
-                ticker, rsi, macd, macd_signal, ema_20, ema_50, sma_20, sma_60, k_val, d_val, atr, model_version, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ticker, rsi, macd, macd_signal, ema_20, ema_50, sma_20, sma_60, k_val, d_val, atr, bb_width, model_version, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             ticker, 
             last.get('rsi'), last.get('macd'), last.get('macd_signal'),
@@ -127,6 +134,7 @@ def save_indicators_to_db(ticker, df, **kwargs):
             last.get('sma_20'), last.get('sma_60'),
             last.get('k'), last.get('d'),
             last.get('atr'),
+            last.get('bb_width'),
             kwargs.get('model_version'),
             datetime.now()
         ))

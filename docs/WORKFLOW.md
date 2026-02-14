@@ -15,7 +15,7 @@ daily_run.bat
 **What it does:**
 
 1. **Sync**: Fetches latest OHLCV data for 1000+ TWSE stocks (`backend/main.py --sync`).
-2. **Train**: Retrains the AI model if data has changed (`core/ai.py`).
+2. **Train**: Retrains the AI model package if data has changed (`core/ai/`).
 3. **Recalc**: Computes V2 Indicators and Rise Scores for all stocks (`backend/recalculate.py`).
 
 ## 2. Manual Operations
