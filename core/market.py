@@ -1,8 +1,8 @@
 import pandas as pd
-import logging
+from core.logger import setup_logger
 from core.data import get_db_connection
 
-logger = logging.getLogger(__name__)
+logger = setup_logger(__name__)
 
 def get_market_status():
     """

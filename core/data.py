@@ -10,6 +10,9 @@ from typing import List, Optional, Dict
 from datetime import datetime, timedelta
 from functools import lru_cache
 from core import config
+from core.logger import setup_logger
+
+logger = setup_logger(__name__)
 
 def get_db_connection():
     conn = sqlite3.connect(config.DB_PATH, timeout=config.DB_TIMEOUT) 

@@ -21,6 +21,9 @@ models_history.json
 .DS_Store
 Thumbs.db
 
+# Logs
+logs/
+
 # Private Template Files
 .agent/
 .cursorrules

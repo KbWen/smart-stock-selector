@@ -43,6 +43,9 @@ from backend.backtest import run_time_machine
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi import Request
 from core.utils import safe_float, parse_date
+from core.logger import setup_logger
+
+logger = setup_logger("backend")
 
 app = FastAPI(title="Smart Stock Selector")
 

@@ -1,7 +1,7 @@
-import logging
 from datetime import datetime
+from core.logger import setup_logger
 
-logger = logging.getLogger(__name__)
+logger = setup_logger(__name__)
 
 def safe_float(value, default=0.0):
     """Safely convert a value to float, returns default on failure."""
